@@ -17,15 +17,21 @@ import (
 )
 
 const (
+	// Main config options
 	chars   = "abcdefghijklmnopqrstuvwxyz0123456789"
 	idSize  = 8
 	siteUrl = "http://localhost:9090"
 	listen  = "localhost:9090"
 	dataDir = "data"
+	maxSize = 1 << 20
 
+	// GET error messages
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
 	unknownError  = "Something went wrong. Woop woop woop woop!"
+
+	// POST error messages
+	missingForm = "Form with paste could not be found."
 )
 
 var validId *regexp.Regexp = regexp.MustCompile("^[a-z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
@@ -82,7 +88,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		file.Close()
 
 	case "POST":
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 		var id, filePath string
 		for {
 			id = randomId()
@@ -104,7 +110,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		data := r.FormValue("paste")
+		err = r.ParseMultipartForm(maxSize << 1)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
+		}
+		vs, found := r.Form["paste"]
+		if !found {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s\n", missingForm)
+			return
+		}
+		data := vs[0]
 		compWriter := gzip.NewWriter(file)
 		_, err = io.WriteString(compWriter, data)
 		compWriter.Close()
