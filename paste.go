@@ -19,7 +19,7 @@ import (
 const (
 	chars   = "abcdefghijklmnopqrstuvwxyz0123456789"
 	idSize  = 8
-	siteUrl = "http://paste.cat"
+	siteUrl = "http://localhost:9090"
 	listen  = "localhost:9090"
 	dataDir = "data"
 
@@ -55,6 +55,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		id := r.URL.Path[1:]
+		if len(id) == 0 {
+			fmt.Fprintf(w, "<html><body><form action=\"%s\" method=\"POST\"><textarea cols=80 rows=48 name=\"paste\"></textarea><br><button type=\"submit\">paste</button></form></body></html>", siteUrl)
+			return
+		}
 		if !validId.MatchString(id) {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", invalidId)
