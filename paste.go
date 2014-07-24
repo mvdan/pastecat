@@ -46,7 +46,8 @@ func randomId() string {
 	for {
 		r := rand.Int63()
 		for i := 0; i < 8; i++ {
-			s[offset] = chars[(r&0xff)%36]
+			randbyte := int(r&0xff) % len(chars)
+			s[offset] = chars[randbyte]
 			offset++
 			if offset == idSize {
 				return string(s)
