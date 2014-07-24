@@ -6,6 +6,7 @@ package main
 import (
 	"compress/gzip"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"math/rand"
@@ -19,25 +20,31 @@ import (
 )
 
 const (
-	chars   = "abcdefghijklmnopqrstuvwxyz0123456789"
-	idSize  = 8
-	siteUrl = "http://localhost:9090"
-	listen  = "localhost:9090"
-	dataDir = "data"
-	maxSize = 1 << 20
-	minLife = 1 * time.Minute
-	defLife = 1 * time.Hour
-	maxLife = 72 * time.Hour
+	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
+	idSize    = 8
+	siteUrl   = "http://localhost:9090"
+	listen    = "localhost:9090"
+	indexTmpl = "index.html"
+	dataDir   = "data"
+	maxSize   = 1 << 20
+	minLife   = 1 * time.Minute
+	defLife   = 1 * time.Hour
+	maxLife   = 24 * time.Hour
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
 	unknownError  = "Something went wrong. Woop woop woop woop!"
 	// POST error messages
-	missingForm = "Form with paste could not be found."
+	missingForm = "Paste could not be found inside the posted form."
+	invalidLife = "The lifetime specified is invalid (units: s,m,h)."
+	smallLife   = "The lifetime specified is too small (min: %s)."
+	largeLife   = "The lifetime specified is too large (max: %s)."
 )
 
 var validId *regexp.Regexp = regexp.MustCompile("^[a-z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
+
+var indexTemplate *template.Template
 
 func pathId(id string) string {
 	return path.Join(id[0:2], id[2:4], id[4:8])
@@ -61,24 +68,28 @@ func randomId() string {
 	return strings.Repeat(chars[0:1], idSize)
 }
 
-func endLife(pastePath string) {
+func endLife(id string) {
+	pastePath := pathId(id)
 	err := os.Remove(pastePath)
-	if err != nil {
-		log.Printf("Could not end the life of %s: %s", pastePath, err)
+	if err == nil {
+		log.Printf("Removed paste: %s", id)
+	} else {
+		log.Printf("Could not end the life of %s: %s", id, err)
 		timer := time.NewTimer(minLife)
 		go func() {
 			<-timer.C
-			endLife(pastePath)
+			endLife(id)
 		}()
 	}
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	var err error
 	switch r.Method {
 	case "GET":
 		id := r.URL.Path[1:]
 		if len(id) == 0 {
-			fmt.Fprintf(w, "<html><body><form action=\"%s\" method=\"post\" enctype=\"multipart/form-data\"><textarea cols=80 rows=48 name=\"paste\"></textarea><br><button type=\"submit\">paste</button></form></body></html>", siteUrl)
+			indexTemplate.Execute(w, siteUrl)
 			return
 		}
 		if !validId.MatchString(id) {
@@ -114,34 +125,42 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		err := r.ParseMultipartForm(maxSize << 1)
-		if err != nil {
+		if err = r.ParseMultipartForm(maxSize << 1); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
 		var life time.Duration
-		vs, found := r.Form["life"]
-		if !found {
+		var content string
+		if vs, found := r.Form["life"]; !found {
 			life = defLife
 		} else {
 			life, err = time.ParseDuration(vs[0])
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, "%s\n", invalidLife)
+				return
+			}
 		}
-		if life < minLife {
-			life = minLife
-		} else if life > maxLife {
-			life = maxLife
+		if life < minLife || life > maxLife {
+			w.WriteHeader(http.StatusBadRequest)
+			if life < minLife {
+				fmt.Fprintf(w, "%s\n", smallLife, minLife)
+			} else {
+				fmt.Fprintf(w, "%s\n", largeLife, maxLife)
+			}
+			return
 		}
-		vs, found = r.Form["paste"]
-		if !found {
+		if vs, found := r.Form["paste"]; found {
+			content = vs[0]
+		} else {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
 		dir, _ := path.Split(pastePath)
-		err = os.MkdirAll(dir, 0700)
-		if err != nil {
+		if err = os.MkdirAll(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
@@ -150,7 +169,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		timer := time.NewTimer(life)
 		go func() {
 			<-timer.C
-			endLife(pastePath)
+			endLife(id)
 		}()
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
@@ -160,7 +179,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		compWriter := gzip.NewWriter(pasteFile)
-		_, err = io.WriteString(compWriter, vs[0])
+		_, err = io.WriteString(compWriter, content)
 		compWriter.Close()
 		pasteFile.Close()
 		if err != nil {
@@ -169,14 +188,26 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
+		log.Printf("Created a new paste: %s (lifetime: %s)", id, life)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
 
 func main() {
-	os.Mkdir(dataDir, 0700)
-	err := os.Chdir(dataDir)
-	if err != nil {
+	var err error
+	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
+		log.Printf("Could not load template %s: %s", indexTmpl, err)
+		return
+	}
+	if err = os.RemoveAll(dataDir); err != nil {
+		log.Printf("Could not clean data directory %s: %s", dataDir, err)
+		return
+	}
+	if err = os.Mkdir(dataDir, 0700); err != nil {
+		log.Printf("Could not create data directory %s: %s", dataDir, err)
+		return
+	}
+	if err = os.Chdir(dataDir); err != nil {
 		log.Printf("Could not enter data directory %s: %s", dataDir, err)
 		return
 	}
