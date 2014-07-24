@@ -20,13 +20,12 @@ import (
 )
 
 const (
-	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
-	idSize    = 8
+	idSize    = 8 // Must be between 5 and 256
 	siteUrl   = "http://localhost:9090"
 	listen    = "localhost:9090"
 	indexTmpl = "index.html"
 	dataDir   = "data"
-	maxSize   = 1 << 20
+	maxSize   = 1 << 20 // before compression
 	minLife   = 1 * time.Minute
 	defLife   = 1 * time.Hour
 	maxLife   = 24 * time.Hour
@@ -34,7 +33,7 @@ const (
 	// GET error messages
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
-	unknownError  = "Something went wrong. Woop woop woop woop!"
+	unknownError  = "Something went terribly wrong."
 	// POST error messages
 	missingForm = "Paste could not be found inside the posted form."
 	invalidLife = "The lifetime specified is invalid (units: s,m,h)."
@@ -42,12 +41,14 @@ const (
 	largeLife   = "The lifetime specified is too large (max: %s)."
 )
 
+const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+
 var validId *regexp.Regexp = regexp.MustCompile("^[a-z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
 
 var indexTemplate *template.Template
 
 func pathId(id string) string {
-	return path.Join(id[0:2], id[2:4], id[4:8])
+	return path.Join(id[0:2], id[2:4], id[4:])
 }
 
 func randomId() string {
