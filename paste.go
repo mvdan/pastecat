@@ -17,12 +17,23 @@ import (
 )
 
 const (
-	// Main config options
-	chars   = "abcdefghijklmnopqrstuvwxyz0123456789"
-	idSize  = 8
+
+	// Can't be bigger than 256 chars
+	chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+	// Should be at least 6 since 4 are used for the dirs
+	idSize = 8
+
+	// Where to send users to when they post a paste
 	siteUrl = "http://localhost:9090"
-	listen  = "localhost:9090"
+
+	// Local listen address
+	listen = "localhost:9090"
+
+	// Where to store the compressed pastes in the filesystem
 	dataDir = "data"
+
+	// Maximum paste size (before compression) in bytes
 	maxSize = 1 << 20
 
 	// GET error messages
