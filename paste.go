@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,33 +15,24 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-
-	// Can't be bigger than 256 chars
-	chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-
-	// Should be at least 6 since 4 are used for the dirs
-	idSize = 8
-
-	// Where to send users to when they post a paste
+	chars   = "abcdefghijklmnopqrstuvwxyz0123456789"
+	idSize  = 8
 	siteUrl = "http://localhost:9090"
-
-	// Local listen address
-	listen = "localhost:9090"
-
-	// Where to store the compressed pastes in the filesystem
+	listen  = "localhost:9090"
 	dataDir = "data"
-
-	// Maximum paste size (before compression) in bytes
 	maxSize = 1 << 20
+	minLife = 1 * time.Minute
+	defLife = 1 * time.Hour
+	maxLife = 72 * time.Hour
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
 	unknownError  = "Something went wrong. Woop woop woop woop!"
-
 	// POST error messages
 	missingForm = "Form with paste could not be found."
 )
@@ -69,12 +61,24 @@ func randomId() string {
 	return strings.Repeat(chars[0:1], idSize)
 }
 
+func endLife(pastePath string) {
+	err := os.Remove(pastePath)
+	if err != nil {
+		log.Printf("Could not end the life of %s: %s", pastePath, err)
+		timer := time.NewTimer(minLife)
+		go func() {
+			<-timer.C
+			endLife(pastePath)
+		}()
+	}
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		id := r.URL.Path[1:]
 		if len(id) == 0 {
-			fmt.Fprintf(w, "<html><body><form action=\"%s\" method=\"POST\"><textarea cols=80 rows=48 name=\"paste\"></textarea><br><button type=\"submit\">paste</button></form></body></html>", siteUrl)
+			fmt.Fprintf(w, "<html><body><form action=\"%s\" method=\"post\" enctype=\"multipart/form-data\"><textarea cols=80 rows=48 name=\"paste\"></textarea><br><button type=\"submit\">paste</button></form></body></html>", siteUrl)
 			return
 		}
 		if !validId.MatchString(id) {
@@ -82,64 +86,85 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
-		filePath := pathId(id)
-		file, err := os.Open(filePath)
+		pastePath := pathId(id)
+		pasteFile, err := os.Open(pastePath)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
 			return
 		}
-		compReader, err := gzip.NewReader(file)
+		compReader, err := gzip.NewReader(pasteFile)
 		if err != nil {
+			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
 		io.Copy(w, compReader)
 		compReader.Close()
-		file.Close()
+		pasteFile.Close()
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
-		var id, filePath string
+		var id, pastePath string
 		for {
 			id = randomId()
-			filePath = pathId(id)
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			pastePath = pathId(id)
+			if _, err := os.Stat(pastePath); os.IsNotExist(err) {
 				break
 			}
 		}
-		dir, _ := path.Split(filePath)
-		err := os.MkdirAll(dir, 0700)
+		err := r.ParseMultipartForm(maxSize << 1)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
-			return
-		}
-		file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
-			return
-		}
-		err = r.ParseMultipartForm(maxSize << 1)
-		if err != nil {
+			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		vs, found := r.Form["paste"]
+		var life time.Duration
+		vs, found := r.Form["life"]
+		if !found {
+			life = defLife
+		} else {
+			life, err = time.ParseDuration(vs[0])
+		}
+		if life < minLife {
+			life = minLife
+		} else if life > maxLife {
+			life = maxLife
+		}
+		vs, found = r.Form["paste"]
 		if !found {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
-		data := vs[0]
-		compWriter := gzip.NewWriter(file)
-		_, err = io.WriteString(compWriter, data)
-		compWriter.Close()
-		file.Close()
+		dir, _ := path.Split(pastePath)
+		err = os.MkdirAll(dir, 0700)
 		if err != nil {
+			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
+		}
+		timer := time.NewTimer(life)
+		go func() {
+			<-timer.C
+			endLife(pastePath)
+		}()
+		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			log.Printf("Could not create new paste pasteFile %s: %s", pastePath, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
+		}
+		compWriter := gzip.NewWriter(pasteFile)
+		_, err = io.WriteString(compWriter, vs[0])
+		compWriter.Close()
+		pasteFile.Close()
+		if err != nil {
+			log.Printf("Could not write compressed data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
@@ -152,6 +177,7 @@ func main() {
 	os.Mkdir(dataDir, 0700)
 	err := os.Chdir(dataDir)
 	if err != nil {
+		log.Printf("Could not enter data directory %s: %s", dataDir, err)
 		return
 	}
 	http.HandleFunc("/", handler)
