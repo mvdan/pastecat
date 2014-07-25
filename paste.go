@@ -71,12 +71,16 @@ func endLife(path string) {
 		log.Printf("Removed paste: %s", path)
 	} else {
 		log.Printf("Could not end the life of %s: %s", path, err)
-		timer := time.NewTimer(2 * time.Minute)
-		go func() {
-			<-timer.C
-			endLife(path)
-		}()
+		programDeath(path, 2*time.Minute)
 	}
+}
+
+func programDeath(path string, after time.Duration) {
+	timer := time.NewTimer(after)
+	go func() {
+		<-timer.C
+		endLife(path)
+	}()
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -144,11 +148,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		timer := time.NewTimer(lifeTime)
-		go func() {
-			<-timer.C
-			endLife(pastePath)
-		}()
+		programDeath(pastePath, lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			log.Printf("Could not create new paste pasteFile %s: %s", pastePath, err)
@@ -191,20 +191,12 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	log.Printf("Recovered paste %s has %s left", path, lifeLeft)
-	timer := time.NewTimer(lifeLeft)
-	go func() {
-		<-timer.C
-		endLife(path)
-	}()
+	programDeath(path, lifeLeft)
 	return nil
 }
 
 func main() {
 	var err error
-	if err = filepath.Walk(dataDir, walkFunc); err != nil {
-		log.Printf("Could not recover data directory %s: %s", dataDir, err)
-		return
-	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Printf("Could not load template %s: %s", indexTmpl, err)
 		return
@@ -215,6 +207,10 @@ func main() {
 	}
 	if err = os.Chdir(dataDir); err != nil {
 		log.Printf("Could not enter data directory %s: %s", dataDir, err)
+		return
+	}
+	if err = filepath.Walk(".", walkFunc); err != nil {
+		log.Printf("Could not recover data directory %s: %s", dataDir, err)
 		return
 	}
 	http.HandleFunc("/", handler)
