@@ -26,7 +26,7 @@ const (
 	listen    = "localhost:9090"
 	indexTmpl = "index.html"
 	dataDir   = "data"
-	maxSize   = 1 << 20 // before compression
+	maxSize   = 1 << 20 // whole POST body
 	lifeTime  = 12 * time.Hour
 
 	// GET error messages
@@ -45,6 +45,22 @@ var indexTemplate *template.Template
 
 func pathId(id string) string {
 	return path.Join(id[0:2], id[2:4], id[4:])
+}
+
+const (
+	_      = iota
+	KB int = 1 << (10 * iota)
+	MB
+)
+
+func readableSize(b int) string {
+	switch {
+	case b >= MB:
+		return fmt.Sprintf("%.2fMB", b/MB)
+	case b >= KB:
+		return fmt.Sprintf("%.2fKB", b/KB)
+	}
+	return fmt.Sprintf("%dB", b)
 }
 
 func randomId() string {
@@ -127,7 +143,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		if err = r.ParseMultipartForm(maxSize << 1); err != nil {
+		if err = r.ParseMultipartForm(maxSize); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", err)
@@ -157,7 +173,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		compWriter := zlib.NewWriter(pasteFile)
-		_, err = io.WriteString(compWriter, content)
+		b, err := io.WriteString(compWriter, content)
 		compWriter.Close()
 		pasteFile.Close()
 		if err != nil {
@@ -166,7 +182,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		log.Printf("Created a new paste: %s", pastePath)
+		log.Printf("Created a new paste: %s (%s)", pastePath, readableSize(b))
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
