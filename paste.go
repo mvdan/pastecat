@@ -36,8 +36,8 @@ const (
 )
 
 var (
-	siteUrl     = flag.String("u", "http://localhost:9090", "URL of the site")
-	listen      = flag.String("l", "localhost:9090", "Host and port to listen to")
+	siteUrl     = flag.String("u", "http://localhost:8080", "URL of the site")
+	listen      = flag.String("l", "localhost:8080", "Host and port to listen to")
 	dataDir     = flag.String("d", "data", "Directory to store all the pastes in")
 	lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
 	maxSizeStr  = flag.String("s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
