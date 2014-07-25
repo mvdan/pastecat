@@ -130,7 +130,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if err = r.ParseMultipartForm(maxSize << 1); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			fmt.Fprintf(w, "%s\n", err)
 			return
 		}
 		var content string
