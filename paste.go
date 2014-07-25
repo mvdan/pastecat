@@ -181,7 +181,7 @@ func main() {
 		log.Printf("Could not clean data directory %s: %s", dataDir, err)
 		return
 	}
-	if err = os.Mkdir(dataDir, 0700); err != nil {
+	if err = os.MkdirAll(dataDir, 0700); err != nil {
 		log.Printf("Could not create data directory %s: %s", dataDir, err)
 		return
 	}
