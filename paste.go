@@ -26,9 +26,7 @@ const (
 	indexTmpl = "index.html"
 	dataDir   = "data"
 	maxSize   = 1 << 20 // before compression
-	minLife   = 1 * time.Minute
-	defLife   = 1 * time.Hour
-	maxLife   = 12 * time.Hour
+	lifeTime  = 12 * time.Hour
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -36,9 +34,6 @@ const (
 	unknownError  = "Something went terribly wrong."
 	// POST error messages
 	missingForm = "Paste could not be found inside the posted form."
-	invalidLife = "The lifetime specified is invalid (units: s,m,h)."
-	smallLife   = "The lifetime specified is too small (min: %s)."
-	largeLife   = "The lifetime specified is too large (max: %s)."
 )
 
 const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -76,7 +71,7 @@ func endLife(id string) {
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
-		timer := time.NewTimer(minLife)
+		timer := time.NewTimer(2 * time.Minute)
 		go func() {
 			<-timer.C
 			endLife(id)
@@ -132,27 +127,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		var life time.Duration
 		var content string
-		if vs, found := r.Form["life"]; !found {
-			life = defLife
-		} else {
-			life, err = time.ParseDuration(vs[0])
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, "%s\n", invalidLife)
-				return
-			}
-		}
-		if life < minLife || life > maxLife {
-			w.WriteHeader(http.StatusBadRequest)
-			if life < minLife {
-				fmt.Fprintf(w, "%s\n", smallLife, minLife)
-			} else {
-				fmt.Fprintf(w, "%s\n", largeLife, maxLife)
-			}
-			return
-		}
 		if vs, found := r.Form["paste"]; found {
 			content = vs[0]
 		} else {
@@ -167,7 +142,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		timer := time.NewTimer(life)
+		timer := time.NewTimer(lifeTime)
 		go func() {
 			<-timer.C
 			endLife(id)
@@ -189,7 +164,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		log.Printf("Created a new paste: %s (lifetime: %s)", id, life)
+		log.Printf("Created a new paste: %s", id)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
