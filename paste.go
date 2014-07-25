@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -64,17 +65,16 @@ func randomId() string {
 	return strings.Repeat(chars[0:1], idSize)
 }
 
-func endLife(id string) {
-	pastePath := pathId(id)
-	err := os.Remove(pastePath)
+func endLife(path string) {
+	err := os.Remove(path)
 	if err == nil {
-		log.Printf("Removed paste: %s", id)
+		log.Printf("Removed paste: %s", path)
 	} else {
-		log.Printf("Could not end the life of %s: %s", id, err)
+		log.Printf("Could not end the life of %s: %s", path, err)
 		timer := time.NewTimer(2 * time.Minute)
 		go func() {
 			<-timer.C
-			endLife(id)
+			endLife(path)
 		}()
 	}
 }
@@ -147,7 +147,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		timer := time.NewTimer(lifeTime)
 		go func() {
 			<-timer.C
-			endLife(id)
+			endLife(pastePath)
 		}()
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
@@ -166,19 +166,47 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		log.Printf("Created a new paste: %s", id)
+		log.Printf("Created a new paste: %s", pastePath)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
 
+func walkFunc(path string, info os.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return nil
+	}
+	deathTime := info.ModTime().Add(lifeTime)
+	now := time.Now()
+	if deathTime.Before(now) {
+		go endLife(path)
+		return nil
+	}
+	var lifeLeft time.Duration
+	if deathTime.After(now.Add(lifeTime)) {
+		lifeLeft = lifeTime
+	} else {
+		lifeLeft = deathTime.Sub(now)
+	}
+	log.Printf("Recovered paste %s has %s left", path, lifeLeft)
+	timer := time.NewTimer(lifeLeft)
+	go func() {
+		<-timer.C
+		endLife(path)
+	}()
+	return nil
+}
+
 func main() {
 	var err error
-	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
-		log.Printf("Could not load template %s: %s", indexTmpl, err)
+	if err = filepath.Walk(dataDir, walkFunc); err != nil {
+		log.Printf("Could not recover data directory %s: %s", dataDir, err)
 		return
 	}
-	if err = os.RemoveAll(dataDir); err != nil {
-		log.Printf("Could not clean data directory %s: %s", dataDir, err)
+	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
+		log.Printf("Could not load template %s: %s", indexTmpl, err)
 		return
 	}
 	if err = os.MkdirAll(dataDir, 0700); err != nil {
