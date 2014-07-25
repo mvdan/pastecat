@@ -4,7 +4,7 @@
 package main
 
 import (
-	"compress/gzip"
+	"compress/zlib"
 	"fmt"
 	"html/template"
 	"io"
@@ -105,7 +105,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
 			return
 		}
-		compReader, err := gzip.NewReader(pasteFile)
+		compReader, err := zlib.NewReader(pasteFile)
 		if err != nil {
 			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -179,7 +179,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		compWriter := gzip.NewWriter(pasteFile)
+		compWriter := zlib.NewWriter(pasteFile)
 		_, err = io.WriteString(compWriter, content)
 		compWriter.Close()
 		pasteFile.Close()
