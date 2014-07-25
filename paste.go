@@ -91,6 +91,7 @@ func parseByteSize(str string) (ByteSize, error) {
 func randomId() string {
 	s := make([]byte, idSize)
 	var offset uint = 0
+MainLoop:
 	for {
 		r := rand.Int63()
 		for i := 0; i < 8; i++ {
@@ -98,12 +99,12 @@ func randomId() string {
 			s[offset] = chars[randbyte]
 			offset++
 			if offset == idSize {
-				return string(s)
+				break MainLoop
 			}
 			r >>= 8
 		}
 	}
-	return strings.Repeat(chars[0:1], idSize)
+	return string(s)
 }
 
 func endLife(path string) {
@@ -241,10 +242,10 @@ func main() {
 	var err error
 	flag.Parse()
 	if lifeTime, err = time.ParseDuration(*lifeTimeStr); err != nil {
-		log.Fatalf("Invalid lifetime '%s': %s", lifeTimeStr, err)
+		log.Fatalf("Invalid lifetime '%s': %s", *lifeTimeStr, err)
 	}
 	if maxSize, err = parseByteSize(*maxSizeStr); err != nil {
-		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
+		log.Fatalf("Invalid max size '%s': %s", *maxSizeStr, err)
 	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
