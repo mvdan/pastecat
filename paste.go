@@ -5,6 +5,7 @@ package main
 
 import (
 	"compress/zlib"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -24,7 +25,7 @@ import (
 const (
 	idSize    = 8 // should be between 6 and 256
 	indexTmpl = "index.html"
-	maxSize   = 1 << 20 // whole POST body
+	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -34,36 +35,57 @@ const (
 	missingForm = "Paste could not be found inside the posted form."
 )
 
-var siteUrl = flag.String("u", "http://localhost:9090", "URL of the site")
-var listen = flag.String("l", "localhost:9090", "Host and port to listen to")
-var dataDir = flag.String("d", "data", "Directory to store all the pastes in")
-var lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
-var lifeTime time.Duration
+var (
+	siteUrl     = flag.String("u", "http://localhost:9090", "URL of the site")
+	listen      = flag.String("l", "localhost:9090", "Host and port to listen to")
+	dataDir     = flag.String("d", "data", "Directory to store all the pastes in")
+	lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
+	maxSizeStr  = flag.String("s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
 
-const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	lifeTime time.Duration
+	maxSize  ByteSize
 
-var validId *regexp.Regexp = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
-
-var indexTemplate *template.Template
+	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
+	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
+	indexTemplate *template.Template
+)
 
 func pathId(id string) string {
 	return path.Join(id[0:2], id[2:4], id[4:])
 }
 
+type ByteSize int64
+
 const (
-	_        = iota
-	KB int64 = 1 << (10 * iota)
+	B ByteSize = 1 << (10 * iota)
+	KB
 	MB
 )
 
-func readableSize(b int64) string {
+func (b ByteSize) String() string {
 	switch {
 	case b >= MB:
-		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
+		return fmt.Sprintf("%.2f MB", float64(b)/float64(MB))
 	case b >= KB:
-		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
+		return fmt.Sprintf("%.2f KB", float64(b)/float64(KB))
 	}
-	return fmt.Sprintf("%dB", b)
+	return fmt.Sprintf("%d B", b)
+}
+
+func parseByteSize(str string) (ByteSize, error) {
+	if !regexByteSize.MatchString(str) {
+		return 0, errors.New("Could not parse size in bytes")
+	}
+	parts := regexByteSize.FindStringSubmatch(str)
+	size, _ := strconv.ParseFloat(string(parts[1]), 64)
+
+	switch string(parts[2]) {
+	case "KB", "K":
+		size *= float64(KB)
+	case "MB", "M":
+		size *= float64(MB)
+	}
+	return ByteSize(size), nil
 }
 
 func randomId() string {
@@ -137,7 +159,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		pasteFile.Close()
 
 	case "POST":
-		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var id, pastePath string
 		for {
 			id = randomId()
@@ -146,7 +168,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-		if err = r.ParseMultipartForm(maxSize); err != nil {
+		if err = r.ParseMultipartForm(int64(maxSize)); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", err)
@@ -185,7 +207,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		log.Printf("Created a new paste: %s (%s)", pastePath, readableSize(int64(b)))
+		writtenSize := ByteSize(b)
+		log.Printf("Created a new paste: %s (%s)", pastePath, writtenSize)
 		fmt.Fprintf(w, "%s/%s\n", *siteUrl, id)
 	}
 }
@@ -221,6 +244,10 @@ func main() {
 		log.Printf("Invalid lifetime '%s': %s", lifeTimeStr, err)
 		return
 	}
+	if maxSize, err = parseByteSize(*maxSizeStr); err != nil {
+		log.Printf("Invalid max size '%s': %s", maxSizeStr, err)
+		return
+	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Printf("Could not load template %s: %s", indexTmpl, err)
 		return
@@ -238,7 +265,7 @@ func main() {
 		return
 	}
 	log.Printf("idSize   = %d", idSize)
-	log.Printf("maxSize  = %s", readableSize(maxSize))
+	log.Printf("maxSize  = %s", maxSize)
 	log.Printf("siteUrl  = %s", *siteUrl)
 	log.Printf("listen   = %s", *listen)
 	log.Printf("dataDir  = %s", *dataDir)
