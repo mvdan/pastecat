@@ -162,12 +162,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var id, pastePath string
-		for {
+		found := false
+		for i := 0; i < 10; i++ {
 			id = randomId()
 			pastePath = pathId(id)
 			if _, err := os.Stat(pastePath); os.IsNotExist(err) {
+				found = true
 				break
 			}
+		}
+		if !found {
+			log.Printf("Gave up trying to find an unused random id.")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
 		}
 		if err = r.ParseMultipartForm(int64(maxSize)); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
