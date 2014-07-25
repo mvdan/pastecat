@@ -241,28 +241,22 @@ func main() {
 	var err error
 	flag.Parse()
 	if lifeTime, err = time.ParseDuration(*lifeTimeStr); err != nil {
-		log.Printf("Invalid lifetime '%s': %s", lifeTimeStr, err)
-		return
+		log.Fatalf("Invalid lifetime '%s': %s", lifeTimeStr, err)
 	}
 	if maxSize, err = parseByteSize(*maxSizeStr); err != nil {
-		log.Printf("Invalid max size '%s': %s", maxSizeStr, err)
-		return
+		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
-		log.Printf("Could not load template %s: %s", indexTmpl, err)
-		return
+		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
 	}
 	if err = os.MkdirAll(*dataDir, 0700); err != nil {
-		log.Printf("Could not create data directory %s: %s", *dataDir, err)
-		return
+		log.Fatalf("Could not create data directory %s: %s", *dataDir, err)
 	}
 	if err = os.Chdir(*dataDir); err != nil {
-		log.Printf("Could not enter data directory %s: %s", *dataDir, err)
-		return
+		log.Fatalf("Could not enter data directory %s: %s", *dataDir, err)
 	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
-		log.Printf("Could not recover data directory %s: %s", *dataDir, err)
-		return
+		log.Fatalf("Could not recover data directory %s: %s", *dataDir, err)
 	}
 	log.Printf("idSize   = %d", idSize)
 	log.Printf("maxSize  = %s", maxSize)
