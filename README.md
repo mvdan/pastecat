@@ -8,16 +8,16 @@ modify times will be used to try to recover the removal time of each paste.
 
 #### Build
 
-	go build
+	go build pastecat.go
 
 #### Run
 
 Default options:
 
-	./paste
+	./pastecat
 
 Custom options:
 
-	./paste -u http://my.site -l hostname:80 -d /tmp/paste -t 1h -s 2M
+	./pastecat -u http://my.site -l hostname:80 -d /tmp/paste -t 1h -s 2M
 
 It will stay in the foreground and log paste activity and errors.
