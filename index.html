@@ -1,0 +1,19 @@
+<html>
+<body>
+	<form action="{{.}}" method="post" enctype="multipart/form-data">
+		<textarea cols=80 rows=40 name="paste"></textarea>
+		<br/>
+		<select name="life">
+			<option>1m</option>
+			<option>5m</option>
+			<option>10m</option>
+			<option>30m</option>
+			<option selected>1h</option>
+			<option>3h</option>
+			<option>6h</option>
+			<option>12h</option>
+		</select>
+		<button type="submit">Paste</button>
+	</form>
+</body>
+</html>

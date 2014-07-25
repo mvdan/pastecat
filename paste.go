@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	idSize    = 8 // Must be between 5 and 256
+	idSize    = 8 // should be between 6 and 256
 	siteUrl   = "http://localhost:9090"
 	listen    = "localhost:9090"
 	indexTmpl = "index.html"
@@ -28,7 +28,7 @@ const (
 	maxSize   = 1 << 20 // before compression
 	minLife   = 1 * time.Minute
 	defLife   = 1 * time.Hour
-	maxLife   = 24 * time.Hour
+	maxLife   = 12 * time.Hour
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
