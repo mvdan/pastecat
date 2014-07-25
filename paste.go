@@ -5,6 +5,7 @@ package main
 
 import (
 	"compress/zlib"
+	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -22,12 +23,8 @@ import (
 
 const (
 	idSize    = 8 // should be between 6 and 256
-	siteUrl   = "http://localhost:9090"
-	listen    = "localhost:9090"
 	indexTmpl = "index.html"
-	dataDir   = "data"
 	maxSize   = 1 << 20 // whole POST body
-	lifeTime  = 12 * time.Hour
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -36,6 +33,12 @@ const (
 	// POST error messages
 	missingForm = "Paste could not be found inside the posted form."
 )
+
+var siteUrl = flag.String("u", "http://localhost:9090", "URL of the site")
+var listen = flag.String("l", "localhost:9090", "Host and port to listen to")
+var dataDir = flag.String("d", "data", "Directory to store all the pastes in")
+var lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
+var lifeTime time.Duration
 
 const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
@@ -48,17 +51,17 @@ func pathId(id string) string {
 }
 
 const (
-	_      = iota
-	KB int = 1 << (10 * iota)
+	_        = iota
+	KB int64 = 1 << (10 * iota)
 	MB
 )
 
-func readableSize(b int) string {
+func readableSize(b int64) string {
 	switch {
 	case b >= MB:
-		return fmt.Sprintf("%.2fMB", b/MB)
+		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
 	case b >= KB:
-		return fmt.Sprintf("%.2fKB", b/KB)
+		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
 	}
 	return fmt.Sprintf("%dB", b)
 }
@@ -106,7 +109,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		var id, pastePath string
 		id = r.URL.Path[1:]
 		if len(id) == 0 {
-			indexTemplate.Execute(w, siteUrl)
+			indexTemplate.Execute(w, *siteUrl)
 			return
 		}
 		if !validId.MatchString(id) {
@@ -182,8 +185,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		log.Printf("Created a new paste: %s (%s)", pastePath, readableSize(b))
-		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
+		log.Printf("Created a new paste: %s (%s)", pastePath, readableSize(int64(b)))
+		fmt.Fprintf(w, "%s/%s\n", *siteUrl, id)
 	}
 }
 
@@ -213,22 +216,33 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 
 func main() {
 	var err error
+	flag.Parse()
+	if lifeTime, err = time.ParseDuration(*lifeTimeStr); err != nil {
+		log.Printf("Invalid lifetime '%s': %s", lifeTimeStr, err)
+		return
+	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Printf("Could not load template %s: %s", indexTmpl, err)
 		return
 	}
-	if err = os.MkdirAll(dataDir, 0700); err != nil {
-		log.Printf("Could not create data directory %s: %s", dataDir, err)
+	if err = os.MkdirAll(*dataDir, 0700); err != nil {
+		log.Printf("Could not create data directory %s: %s", *dataDir, err)
 		return
 	}
-	if err = os.Chdir(dataDir); err != nil {
-		log.Printf("Could not enter data directory %s: %s", dataDir, err)
+	if err = os.Chdir(*dataDir); err != nil {
+		log.Printf("Could not enter data directory %s: %s", *dataDir, err)
 		return
 	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
-		log.Printf("Could not recover data directory %s: %s", dataDir, err)
+		log.Printf("Could not recover data directory %s: %s", *dataDir, err)
 		return
 	}
+	log.Printf("idSize   = %d", idSize)
+	log.Printf("maxSize  = %s", readableSize(maxSize))
+	log.Printf("siteUrl  = %s", *siteUrl)
+	log.Printf("listen   = %s", *listen)
+	log.Printf("dataDir  = %s", *dataDir)
+	log.Printf("lifeTime = %s", lifeTime)
 	http.HandleFunc("/", handler)
-	http.ListenAndServe(listen, nil)
+	http.ListenAndServe(*listen, nil)
 }
