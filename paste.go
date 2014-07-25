@@ -244,5 +244,5 @@ func main() {
 	log.Printf("dataDir  = %s", *dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
 	http.HandleFunc("/", handler)
-	http.ListenAndServe(*listen, nil)
+	log.Fatal(http.ListenAndServe(*listen, nil))
 }
