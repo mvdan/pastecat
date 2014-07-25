@@ -38,7 +38,7 @@ const (
 
 const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-var validId *regexp.Regexp = regexp.MustCompile("^[a-z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
+var validId *regexp.Regexp = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
 
 var indexTemplate *template.Template
 
@@ -83,7 +83,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch r.Method {
 	case "GET":
-		id := r.URL.Path[1:]
+		var id, pastePath string
+		id = r.URL.Path[1:]
 		if len(id) == 0 {
 			indexTemplate.Execute(w, siteUrl)
 			return
@@ -93,7 +94,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
-		pastePath := pathId(id)
+		id = strings.ToLower(id)
+		pastePath = pathId(id)
 		pasteFile, err := os.Open(pastePath)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
