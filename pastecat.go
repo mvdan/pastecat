@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	idSize    = 8 // should be between 6 and 256
 	indexTmpl = "index.html"
 	formTmpl  = "form.html"
 	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -42,11 +41,12 @@ var (
 	dataDir     = flag.String("d", "data", "Directory to store all the pastes in")
 	lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
 	maxSizeStr  = flag.String("s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
+	idSize      = flag.Int("i", 8, "Size of the paste ids (between 6 and 256)")
 
 	lifeTime time.Duration
 	maxSize  ByteSize
 
-	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
+	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(*idSize) + "}$")
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
@@ -91,8 +91,8 @@ func parseByteSize(str string) (ByteSize, error) {
 }
 
 func randomId() string {
-	s := make([]byte, idSize)
-	var offset uint = 0
+	s := make([]byte, *idSize)
+	var offset int = 0
 MainLoop:
 	for {
 		r := rand.Int63()
@@ -100,7 +100,7 @@ MainLoop:
 			randbyte := int(r&0xff) % len(chars)
 			s[offset] = chars[randbyte]
 			offset++
-			if offset == idSize {
+			if offset == *idSize {
 				break MainLoop
 			}
 			r >>= 8
@@ -275,7 +275,7 @@ func main() {
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", *dataDir, err)
 	}
-	log.Printf("idSize   = %d", idSize)
+	log.Printf("idSize   = %d", *idSize)
 	log.Printf("maxSize  = %s", maxSize)
 	log.Printf("siteUrl  = %s", *siteUrl)
 	log.Printf("listen   = %s", *listen)
