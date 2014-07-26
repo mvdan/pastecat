@@ -25,6 +25,7 @@ import (
 const (
 	idSize    = 8 // should be between 6 and 256
 	indexTmpl = "index.html"
+	formTmpl  = "form.html"
 	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 	// GET error messages
@@ -48,6 +49,7 @@ var (
 	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.FormatInt(idSize, 10) + "}$")
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
+	formTemplate  *template.Template
 )
 
 func pathId(id string) string {
@@ -129,19 +131,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch r.Method {
 	case "GET":
-		var id, pastePath string
-		id = r.URL.Path[1:]
-		if len(id) == 0 {
+		switch r.URL.Path {
+		case "/":
 			indexTemplate.Execute(w, *siteUrl)
 			return
+		case "/form":
+			formTemplate.Execute(w, *siteUrl)
+			return
 		}
+		id := r.URL.Path[1:]
 		if !validId.MatchString(id) {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
 		id = strings.ToLower(id)
-		pastePath = pathId(id)
+		pastePath := pathId(id)
 		pasteFile, err := os.Open(pastePath)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
@@ -257,6 +262,9 @@ func main() {
 	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
+	}
+	if formTemplate, err = template.ParseFiles(formTmpl); err != nil {
+		log.Fatalf("Could not load template %s: %s", formTmpl, err)
 	}
 	if err = os.MkdirAll(*dataDir, 0700); err != nil {
 		log.Fatalf("Could not create data directory %s: %s", *dataDir, err)

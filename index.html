@@ -1,9 +1,33 @@
 <html>
 <body>
-	<form action="{{.}}" method="post" enctype="multipart/form-data">
-		<textarea cols=80 rows=40 name="paste"></textarea>
-		<br/>
-		<button type="submit">Paste</button>
-	</form>
-</body>
+<pre>
+Upload a new paste:
+
+  $ echo foo | curl -F 'paste=&lt;-' {{.}}
+  {{.}}/a63n03rp
+
+Fetch it:
+
+  $ curl ̣{{.}}/a63n03rp
+  foo
+
+Alternatively, you can use the <a href="form">web form</a> or a shell function:
+
+  pcat() {
+    if [ -t 0 ]; then
+      [ $# -gt 0 ] || return 1
+      cat "$*" | curl -F 'paste&lt;-' {{.}}
+    else
+      curl -F 'paste&lt;' {{.}}
+    fi
+  }
+
+This will allow for easier usage:
+
+  $ pcat file
+  $ echo foo | pcat
+
+<a href="http://github.com/mvdan/paste.cat">github.com/mvdan/paste.cat</a>
+</pre>
 </html>
+</body>
