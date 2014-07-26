@@ -44,7 +44,7 @@ var (
 	idSize     int
 	maxSize    ByteSize
 
-	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
+	validId       *regexp.Regexp
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
@@ -57,14 +57,21 @@ func init() {
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
 	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
+	validId = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
 }
 
 type Id string
 
-func IdFromPath(idPath string) Id {
-	dirs, file := path.Split(idPath)
-	dir1, dir2 := path.Split(dirs)
-	return Id(dir1 + dir2 + file)
+func IdFromPath(idPath string) (Id, error) {
+	parts := strings.Split(idPath, string(filepath.Separator))
+	if len(parts) != 3 {
+		return "", errors.New("Found invalid number of directories at " + idPath)
+	}
+	rawId := parts[0] + parts[1] + parts[2]
+	if !validId.MatchString(rawId) {
+		return "", errors.New("Found invalid id " + rawId)
+	}
+	return Id(rawId), nil
 }
 
 func randomId() Id {
@@ -253,7 +260,10 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if fileInfo.IsDir() {
 		return nil
 	}
-	id := IdFromPath(filePath)
+	id, err := IdFromPath(filePath)
+	if err != nil {
+		return err
+	}
 	deathTime := fileInfo.ModTime().Add(lifeTime)
 	now := time.Now()
 	if deathTime.Before(now) {
