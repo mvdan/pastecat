@@ -36,21 +36,28 @@ const (
 )
 
 var (
-	siteUrl     = flag.String("u", "http://localhost:8080", "URL of the site")
-	listen      = flag.String("l", "localhost:8080", "Host and port to listen to")
-	dataDir     = flag.String("d", "data", "Directory to store all the pastes in")
-	lifeTimeStr = flag.String("t", "12h", "Lifetime of the pastes (units: s,m,h)")
-	maxSizeStr  = flag.String("s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
-	idSize      = flag.Int("i", 8, "Size of the paste ids (between 6 and 256)")
+	siteUrl    string
+	listen     string
+	dataDir    string
+	lifeTime   time.Duration
+	maxSizeStr string
+	idSize     int
+	maxSize    ByteSize
 
-	lifeTime time.Duration
-	maxSize  ByteSize
-
-	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(*idSize) + "}$")
+	validId       = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
 )
+
+func init() {
+	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
+	flag.StringVar(&listen, "l", "localhost:8080", "Host and port to listen to")
+	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
+	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
+	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
+	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
+}
 
 func pathId(id string) string {
 	return path.Join(id[0:2], id[2:4], id[4:])
@@ -91,7 +98,7 @@ func parseByteSize(str string) (ByteSize, error) {
 }
 
 func randomId() string {
-	s := make([]byte, *idSize)
+	s := make([]byte, idSize)
 	var offset int = 0
 MainLoop:
 	for {
@@ -100,7 +107,7 @@ MainLoop:
 			randbyte := int(r&0xff) % len(chars)
 			s[offset] = chars[randbyte]
 			offset++
-			if offset == *idSize {
+			if offset == idSize {
 				break MainLoop
 			}
 			r >>= 8
@@ -133,10 +140,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, *siteUrl)
+			indexTemplate.Execute(w, siteUrl)
 			return
 		case "/form":
-			formTemplate.Execute(w, *siteUrl)
+			formTemplate.Execute(w, siteUrl)
 			return
 		}
 		id := r.URL.Path[1:]
@@ -223,7 +230,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		writtenSize := ByteSize(b)
 		log.Printf("Created a new paste: %s (%s)", pastePath, writtenSize)
-		fmt.Fprintf(w, "%s/%s\n", *siteUrl, id)
+		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
 
@@ -254,11 +261,8 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 func main() {
 	var err error
 	flag.Parse()
-	if lifeTime, err = time.ParseDuration(*lifeTimeStr); err != nil {
-		log.Fatalf("Invalid lifetime '%s': %s", *lifeTimeStr, err)
-	}
-	if maxSize, err = parseByteSize(*maxSizeStr); err != nil {
-		log.Fatalf("Invalid max size '%s': %s", *maxSizeStr, err)
+	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
+		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
@@ -266,21 +270,21 @@ func main() {
 	if formTemplate, err = template.ParseFiles(formTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", formTmpl, err)
 	}
-	if err = os.MkdirAll(*dataDir, 0700); err != nil {
-		log.Fatalf("Could not create data directory %s: %s", *dataDir, err)
+	if err = os.MkdirAll(dataDir, 0700); err != nil {
+		log.Fatalf("Could not create data directory %s: %s", dataDir, err)
 	}
-	if err = os.Chdir(*dataDir); err != nil {
-		log.Fatalf("Could not enter data directory %s: %s", *dataDir, err)
+	if err = os.Chdir(dataDir); err != nil {
+		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
 	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
-		log.Fatalf("Could not recover data directory %s: %s", *dataDir, err)
+		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
 	}
-	log.Printf("idSize   = %d", *idSize)
+	log.Printf("idSize   = %d", idSize)
 	log.Printf("maxSize  = %s", maxSize)
-	log.Printf("siteUrl  = %s", *siteUrl)
-	log.Printf("listen   = %s", *listen)
-	log.Printf("dataDir  = %s", *dataDir)
+	log.Printf("siteUrl  = %s", siteUrl)
+	log.Printf("listen   = %s", listen)
+	log.Printf("dataDir  = %s", dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(*listen, nil))
+	log.Fatal(http.ListenAndServe(listen, nil))
 }
