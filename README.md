@@ -18,34 +18,6 @@ Default options:
 
 Custom options:
 
-	$ ./pastecat -u http://my.site -l hostname:80 -d /tmp/paste -t 1h -s 2M
+	$ ./pastecat -u http://my.site -l hostname:80 -d /tmp/paste -t 1h -s 2M -i 6
 
 It will stay in the foreground and log paste activity and errors.
-
-#### Use
-
-Upload a new paste:
-
-	$ echo foo | curl -F 'paste=<-' http://paste.cat
-	http://paste.cat/a63n03rp
-
-Fetch it:
-
-	$ curl http://paste.cat/a63n03rp
-	foo
-
-Alternatively, you can use the help of a shell function:
-
-	pcat() {
-		if [ -t 0 ]; then
-			[ $# -gt 0 ] || return 1
-			cat "$*" | curl -F 'paste=<-' http://paste.cat
-		else
-			curl -F 'paste=<-' http://paste.cat
-		fi
-	}
-
-This will allow for easier usage:
-
-	$ pcat file
-	$ echo foo | pcat
