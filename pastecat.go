@@ -261,6 +261,9 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 func main() {
 	var err error
 	flag.Parse()
+	if idSize < 6 || idSize > 256 {
+		log.Fatalf("Provided id size %d is not between 6 and 256", idSize)
+	}
 	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
 		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
