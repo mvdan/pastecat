@@ -16,9 +16,9 @@ Alternatively, you can use the <a href="form">web form</a> or a shell function:
   pcat() {
     if [ -t 0 ]; then
       [ $# -gt 0 ] || return 1
-      cat "$*" | curl -F 'paste&lt;-' {{.}}
+      cat "$@" | curl -F 'paste&lt;-' {{.}}
     else
-      curl -F 'paste&lt;' {{.}}
+      curl -F 'paste&lt;-' {{.}}
     fi
   }
 
