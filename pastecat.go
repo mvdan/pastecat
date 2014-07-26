@@ -186,7 +186,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var id Id
-		var pastePath string
+		var pastePath, content string
 		found := false
 		for i := 0; i < 10; i++ {
 			id = randomId()
@@ -197,7 +197,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
-			log.Printf("Gave up trying to find an unused random id.")
+			log.Printf("Gave up trying to find an unused random id")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
@@ -208,7 +208,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", err)
 			return
 		}
-		var content string
 		if vs, found := r.Form["paste"]; found {
 			content = vs[0]
 		} else {
@@ -247,15 +246,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func walkFunc(path string, info os.FileInfo, err error) error {
+func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
-	if info.IsDir() {
+	if fileInfo.IsDir() {
 		return nil
 	}
-	id := IdFromPath(path)
-	deathTime := info.ModTime().Add(lifeTime)
+	id := IdFromPath(filePath)
+	deathTime := fileInfo.ModTime().Add(lifeTime)
 	now := time.Now()
 	if deathTime.Before(now) {
 		go id.endLife()
