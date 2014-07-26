@@ -59,8 +59,57 @@ func init() {
 	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
 }
 
-func pathId(id string) string {
-	return path.Join(id[0:2], id[2:4], id[4:])
+type Id string
+
+func IdFromPath(idPath string) Id {
+	dirs, file := path.Split(idPath)
+	dir1, dir2 := path.Split(dirs)
+	return Id(dir1 + dir2 + file)
+}
+
+func randomId() Id {
+	s := make([]byte, idSize)
+	var offset int = 0
+MainLoop:
+	for {
+		r := rand.Int63()
+		for i := 0; i < 8; i++ {
+			randbyte := int(r&0xff) % len(chars)
+			s[offset] = chars[randbyte]
+			offset++
+			if offset == idSize {
+				break MainLoop
+			}
+			r >>= 8
+		}
+	}
+	return Id(s)
+}
+
+func (id Id) String() string {
+	return string(id)
+}
+
+func (id Id) Path() string {
+	return path.Join(string(id[0:2]), string(id[2:4]), string(id[4:]))
+}
+
+func (id Id) endLife() {
+	err := os.Remove(id.Path())
+	if err == nil {
+		log.Printf("Removed paste: %s", id)
+	} else {
+		log.Printf("Could not end the life of %s: %s", id, err)
+		id.endLifeAfter(2 * time.Minute)
+	}
+}
+
+func (id Id) endLifeAfter(duration time.Duration) {
+	timer := time.NewTimer(duration)
+	go func() {
+		<-timer.C
+		id.endLife()
+	}()
 }
 
 type ByteSize int64
@@ -70,16 +119,6 @@ const (
 	KB
 	MB
 )
-
-func (b ByteSize) String() string {
-	switch {
-	case b >= MB:
-		return fmt.Sprintf("%.2f MB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.2f KB", float64(b)/float64(KB))
-	}
-	return fmt.Sprintf("%d B", b)
-}
 
 func parseByteSize(str string) (ByteSize, error) {
 	if !regexByteSize.MatchString(str) {
@@ -97,41 +136,14 @@ func parseByteSize(str string) (ByteSize, error) {
 	return ByteSize(size), nil
 }
 
-func randomId() string {
-	s := make([]byte, idSize)
-	var offset int = 0
-MainLoop:
-	for {
-		r := rand.Int63()
-		for i := 0; i < 8; i++ {
-			randbyte := int(r&0xff) % len(chars)
-			s[offset] = chars[randbyte]
-			offset++
-			if offset == idSize {
-				break MainLoop
-			}
-			r >>= 8
-		}
+func (b ByteSize) String() string {
+	switch {
+	case b >= MB:
+		return fmt.Sprintf("%.2f MB", float64(b)/float64(MB))
+	case b >= KB:
+		return fmt.Sprintf("%.2f KB", float64(b)/float64(KB))
 	}
-	return string(s)
-}
-
-func endLife(path string) {
-	err := os.Remove(path)
-	if err == nil {
-		log.Printf("Removed paste: %s", path)
-	} else {
-		log.Printf("Could not end the life of %s: %s", path, err)
-		programDeath(path, 2*time.Minute)
-	}
-}
-
-func programDeath(path string, after time.Duration) {
-	timer := time.NewTimer(after)
-	go func() {
-		<-timer.C
-		endLife(path)
-	}()
+	return fmt.Sprintf("%d B", b)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -146,14 +158,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			formTemplate.Execute(w, siteUrl)
 			return
 		}
-		id := r.URL.Path[1:]
-		if !validId.MatchString(id) {
+		rawId := r.URL.Path[1:]
+		if !validId.MatchString(rawId) {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
-		id = strings.ToLower(id)
-		pastePath := pathId(id)
+		id := Id(strings.ToLower(rawId))
+		pastePath := id.Path()
 		pasteFile, err := os.Open(pastePath)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
@@ -173,11 +185,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
-		var id, pastePath string
+		var id Id
+		var pastePath string
 		found := false
 		for i := 0; i < 10; i++ {
 			id = randomId()
-			pastePath = pathId(id)
+			pastePath = id.Path()
 			if _, err := os.Stat(pastePath); os.IsNotExist(err) {
 				found = true
 				break
@@ -210,7 +223,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		programDeath(pastePath, lifeTime)
+		id.endLifeAfter(lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			log.Printf("Could not create new paste pasteFile %s: %s", pastePath, err)
@@ -229,7 +242,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writtenSize := ByteSize(b)
-		log.Printf("Created a new paste: %s (%s)", pastePath, writtenSize)
+		log.Printf("Created a new paste: %s (%s)", id, writtenSize)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
@@ -241,10 +254,11 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	if info.IsDir() {
 		return nil
 	}
+	id := IdFromPath(path)
 	deathTime := info.ModTime().Add(lifeTime)
 	now := time.Now()
 	if deathTime.Before(now) {
-		go endLife(path)
+		go id.endLife()
 		return nil
 	}
 	var lifeLeft time.Duration
@@ -253,8 +267,8 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	} else {
 		lifeLeft = deathTime.Sub(now)
 	}
-	log.Printf("Recovered paste %s has %s left", path, lifeLeft)
-	programDeath(path, lifeLeft)
+	log.Printf("Recovered paste %s has %s left", id, lifeLeft)
+	id.endLifeAfter(lifeLeft)
 	return nil
 }
 
