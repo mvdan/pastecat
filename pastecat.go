@@ -36,13 +36,11 @@ const (
 )
 
 var (
-	siteUrl    string
-	listen     string
-	dataDir    string
-	lifeTime   time.Duration
-	maxSizeStr string
-	idSize     int
-	maxSize    ByteSize
+	siteUrl, listen, dataDir string
+	lifeTime                 time.Duration
+	maxSizeStr               string
+	idSize                   int
+	maxSize                  ByteSize
 
 	validId       *regexp.Regexp
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
