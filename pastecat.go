@@ -72,7 +72,7 @@ func IdFromPath(idPath string) (Id, error) {
 	return Id(rawId), nil
 }
 
-func randomId() Id {
+func RandomId() Id {
 	s := make([]byte, idSize)
 	var offset int = 0
 MainLoop:
@@ -99,21 +99,21 @@ func (id Id) Path() string {
 	return path.Join(string(id[0:2]), string(id[2:4]), string(id[4:]))
 }
 
-func (id Id) endLife() {
+func (id Id) EndLife() {
 	err := os.Remove(id.Path())
 	if err == nil {
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
-		id.endLifeAfter(2 * time.Minute)
+		id.EndLifeAfter(2 * time.Minute)
 	}
 }
 
-func (id Id) endLifeAfter(duration time.Duration) {
+func (id Id) EndLifeAfter(duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
-		id.endLife()
+		id.EndLife()
 	}()
 }
 
@@ -194,7 +194,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		var pastePath, content string
 		found := false
 		for i := 0; i < 10; i++ {
-			id = randomId()
+			id = RandomId()
 			pastePath = id.Path()
 			if _, err := os.Stat(pastePath); os.IsNotExist(err) {
 				found = true
@@ -227,7 +227,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		id.endLifeAfter(lifeTime)
+		id.EndLifeAfter(lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			log.Printf("Could not create new paste pasteFile %s: %s", pastePath, err)
@@ -265,7 +265,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	deathTime := fileInfo.ModTime().Add(lifeTime)
 	now := time.Now()
 	if deathTime.Before(now) {
-		go id.endLife()
+		go id.EndLife()
 		return nil
 	}
 	var lifeLeft time.Duration
@@ -275,7 +275,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	log.Printf("Recovered paste %s has %s left", id, lifeLeft)
-	id.endLifeAfter(lifeLeft)
+	id.EndLifeAfter(lifeLeft)
 	return nil
 }
 
