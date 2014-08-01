@@ -179,6 +179,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
 			return
 		}
+		defer pasteFile.Close()
 		compReader, err := zlib.NewReader(pasteFile)
 		if err != nil {
 			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
@@ -186,9 +187,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
+		defer compReader.Close()
 		io.Copy(w, compReader)
-		compReader.Close()
-		pasteFile.Close()
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -237,10 +237,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
+		defer pasteFile.Close()
 		compWriter := zlib.NewWriter(pasteFile)
+		defer compWriter.Close()
 		b, err := io.WriteString(compWriter, content)
-		compWriter.Close()
-		pasteFile.Close()
 		if err != nil {
 			log.Printf("Could not write compressed data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
