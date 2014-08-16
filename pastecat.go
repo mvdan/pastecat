@@ -295,6 +295,12 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 
 func main() {
 	var err error
+	log.Printf("idSize   = %d", idSize)
+	log.Printf("maxSize  = %s", maxSize)
+	log.Printf("siteUrl  = %s", siteUrl)
+	log.Printf("listen   = %s", listen)
+	log.Printf("dataDir  = %s", dataDir)
+	log.Printf("lifeTime = %s", lifeTime)
 	flag.Parse()
 	if idSize < 6 || idSize > 256 {
 		log.Fatalf("Provided id size %d is not between 6 and 256", idSize)
@@ -317,12 +323,6 @@ func main() {
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
 	}
-	log.Printf("idSize   = %d", idSize)
-	log.Printf("maxSize  = %s", maxSize)
-	log.Printf("siteUrl  = %s", siteUrl)
-	log.Printf("listen   = %s", listen)
-	log.Printf("dataDir  = %s", dataDir)
-	log.Printf("lifeTime = %s", lifeTime)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
