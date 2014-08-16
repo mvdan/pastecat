@@ -46,6 +46,7 @@ var (
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
+	pasteInfos    = make(map[Id]PasteInfo)
 )
 
 func init() {
@@ -56,6 +57,10 @@ func init() {
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
 	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
 	validId = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
+}
+
+type PasteInfo struct {
+	ModTime time.Time
 }
 
 type Id string
@@ -102,6 +107,7 @@ func (id Id) Path() string {
 func (id Id) EndLife() {
 	err := os.Remove(id.Path())
 	if err == nil {
+		delete(pasteInfos, id)
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
@@ -170,11 +176,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := Id(strings.ToLower(rawId))
+		_, e := pasteInfos[id]
+		if !e {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s\n", pasteNotFound)
+			return
+		}
 		pastePath := id.Path()
 		pasteFile, err := os.Open(pastePath)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "%s\n", pasteNotFound)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
 		defer pasteFile.Close()
@@ -195,8 +207,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		found := false
 		for i := 0; i < 10; i++ {
 			id = RandomId()
-			pastePath = id.Path()
-			if _, err := os.Stat(pastePath); os.IsNotExist(err) {
+			if _, e := pasteInfos[id]; !e {
 				found = true
 				break
 			}
@@ -246,6 +257,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writtenSize := ByteSize(b)
+		pasteInfos[id] = PasteInfo{ModTime: time.Now()}
 		log.Printf("Created a new paste: %s (%s)", id, writtenSize)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
@@ -262,7 +274,8 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
-	deathTime := fileInfo.ModTime().Add(lifeTime)
+	modTime := fileInfo.ModTime()
+	deathTime := modTime.Add(lifeTime)
 	now := time.Now()
 	if deathTime.Before(now) {
 		go id.EndLife()
@@ -275,6 +288,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	log.Printf("Recovered paste %s has %s left", id, lifeLeft)
+	pasteInfos[id] = PasteInfo{ModTime: modTime}
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
