@@ -185,10 +185,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, siteUrl)
+			indexTemplate.Execute(w, struct {
+				SiteUrl, LifeTime string
+			}{
+				siteUrl,
+				fmt.Sprintf("%g hours and %g minutes", lifeTime.Hours(),
+					lifeTime.Minutes()-lifeTime.Hours()*60),
+			})
 			return
 		case "/form":
-			formTemplate.Execute(w, siteUrl)
+			formTemplate.Execute(w, struct{ SiteUrl string }{siteUrl})
 			return
 		}
 		rawId := r.URL.Path[1:]
