@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -47,8 +48,11 @@ var (
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
-	pasteInfos    = make(map[Id]PasteInfo)
-	customRand    *rand.Rand
+	data          = struct {
+		sync.RWMutex
+		m map[Id]PasteInfo
+	}{m: make(map[Id]PasteInfo)}
+	customRand *rand.Rand
 )
 
 func init() {
@@ -82,23 +86,32 @@ func IdFromPath(idPath string) (Id, error) {
 	return Id(rawId), nil
 }
 
-func RandomId() Id {
+func RandomId() (Id, error) {
 	s := make([]byte, idSize)
-	var offset int = 0
-MainLoop:
-	for {
-		r := customRand.Int63()
-		for i := 0; i < 8; i++ {
-			randbyte := int(r&0xff) % len(chars)
-			s[offset] = chars[randbyte]
-			offset++
-			if offset == idSize {
-				break MainLoop
+	var id Id
+	data.RLock()
+	for try := 0; try < 10; try++ {
+		var offset int = 0
+	RandLoop:
+		for {
+			r := customRand.Int63()
+			for i := 0; i < 8; i++ {
+				randbyte := int(r&0xff) % len(chars)
+				s[offset] = chars[randbyte]
+				offset++
+				if offset == idSize {
+					break RandLoop
+				}
+				r >>= 8
 			}
-			r >>= 8
+		}
+		id = Id(s)
+		if _, e := data.m[id]; !e {
+			data.RUnlock()
+			return id, nil
 		}
 	}
-	return Id(s)
+	return id, errors.New("error")
 }
 
 func (id Id) String() string {
@@ -110,14 +123,16 @@ func (id Id) Path() string {
 }
 
 func (id Id) EndLife() {
+	data.Lock()
 	err := os.Remove(id.Path())
 	if err == nil {
-		delete(pasteInfos, id)
+		delete(data.m, id)
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
 		id.EndLifeAfter(2 * time.Minute)
 	}
+	data.Unlock()
 }
 
 func (id Id) EndLifeAfter(duration time.Duration) {
@@ -181,7 +196,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := Id(strings.ToLower(rawId))
-		pasteInfo, e := pasteInfos[id]
+		data.RLock()
+		pasteInfo, e := data.m[id]
+		data.RUnlock()
 		if !e {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
@@ -218,15 +235,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var id Id
 		var content string
-		found := false
-		for i := 0; i < 10; i++ {
-			id = RandomId()
-			if _, e := pasteInfos[id]; !e {
-				found = true
-				break
-			}
-		}
-		if !found {
+		id, err = RandomId()
+		if err != nil {
 			log.Printf("Gave up trying to find an unused random id")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
@@ -273,11 +283,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writtenSize := ByteSize(b)
-		pasteInfos[id] = PasteInfo{
+		data.Lock()
+		data.m[id] = PasteInfo{
 			ModTime:   time.Now(),
 			DeathTime: deathTime,
 			Size:      writtenSize,
 		}
+		data.Unlock()
 		log.Printf("Created a new paste: %s (%s)", id, writtenSize)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
@@ -322,11 +334,13 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	} else {
 		lifeLeft = deathTime.Sub(now)
 	}
-	pasteInfos[id] = PasteInfo{
+	data.Lock()
+	data.m[id] = PasteInfo{
 		ModTime:   modTime,
 		DeathTime: deathTime,
 		Size:      uncompSize,
 	}
+	data.Unlock()
 	log.Printf("Recovered paste %s (%s) from %s has %s left", id, uncompSize, modTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
