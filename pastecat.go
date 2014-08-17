@@ -200,6 +200,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		defer pasteFile.Close()
 		w.Header().Set("Etag", etag)
+		w.Header().Set("Last-Modified", pasteInfo.ModTime.Format(http.TimeFormat))
 		compReader, err := zlib.NewReader(pasteFile)
 		if err != nil {
 			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
