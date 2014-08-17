@@ -62,7 +62,9 @@ func init() {
 }
 
 type PasteInfo struct {
-	ModTime time.Time
+	ModTime   time.Time
+	DeathTime time.Time
+	Size      ByteSize
 }
 
 type Id string
@@ -250,6 +252,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
+		deathTime := time.Now().Add(lifeTime)
 		id.EndLifeAfter(lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
@@ -269,7 +272,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writtenSize := ByteSize(b)
-		pasteInfos[id] = PasteInfo{ModTime: time.Now()}
+		pasteInfos[id] = PasteInfo{
+			ModTime:   time.Now(),
+			DeathTime: deathTime,
+			Size:      writtenSize,
+		}
 		log.Printf("Created a new paste: %s (%s)", id, writtenSize)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
@@ -300,7 +307,11 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	log.Printf("Recovered paste %s has %s left", id, lifeLeft)
-	pasteInfos[id] = PasteInfo{ModTime: modTime}
+	pasteInfos[id] = PasteInfo{
+		ModTime:   modTime,
+		DeathTime: deathTime,
+		Size:      ByteSize(fileInfo.Size()),
+	}
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
