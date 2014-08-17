@@ -232,15 +232,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
-		var id Id
 		var content string
-		id, err = RandomId()
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
-			return
-		}
 		if err = r.ParseMultipartForm(int64(maxSize)); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -254,21 +246,32 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
+		var id Id
+		if id, err = RandomId(); err == nil {
+			data.Lock()
+		} else {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
+		}
 		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
 		if err = os.MkdirAll(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
+			data.Unlock()
 			return
 		}
 		deathTime := time.Now().Add(lifeTime)
 		id.EndLifeAfter(lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
-			log.Printf("Could not create new paste pasteFile %s: %s", pastePath, err)
+			log.Printf("Could not create new paste file %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
+			data.Unlock()
 			return
 		}
 		defer pasteFile.Close()
@@ -277,6 +280,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Could not write data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
+			data.Unlock()
 			return
 		}
 		writtenSize := ByteSize(b)
@@ -290,7 +294,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if pasteInfo.ContentType == "application/octet-stream" {
 			pasteInfo.ContentType = "text-plain; charset=utf-8"
 		}
-		data.Lock()
 		data.m[id] = pasteInfo
 		data.Unlock()
 		log.Printf("Created new paste %s (%s %s) to die at %s",
