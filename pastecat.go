@@ -4,13 +4,11 @@
 package main
 
 import (
-	"compress/zlib"
 	"errors"
 	"flag"
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -222,15 +220,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer pasteFile.Close()
 		w.Header().Set("Etag", etag)
 		w.Header().Set("Last-Modified", pasteInfo.ModTime.Format(http.TimeFormat))
-		compReader, err := zlib.NewReader(pasteFile)
-		if err != nil {
-			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
-			return
-		}
-		defer compReader.Close()
-		io.Copy(w, compReader)
+		io.Copy(w, pasteFile)
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -274,11 +264,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer pasteFile.Close()
-		compWriter := zlib.NewWriter(pasteFile)
-		defer compWriter.Close()
-		b, err := io.WriteString(compWriter, content)
+		b, err := io.WriteString(pasteFile, content)
 		if err != nil {
-			log.Printf("Could not write compressed data into %s: %s", pastePath, err)
+			log.Printf("Could not write data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
@@ -314,35 +302,21 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		go id.EndLife()
 		return nil
 	}
-	pasteFile, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer pasteFile.Close()
-	compReader, err := zlib.NewReader(pasteFile)
-	if err != nil {
-		return err
-	}
-	defer compReader.Close()
-	b, err := io.Copy(ioutil.Discard, compReader)
-	if err != nil {
-		return err
-	}
-	uncompSize := ByteSize(b)
 	var lifeLeft time.Duration
 	if deathTime.After(now.Add(lifeTime)) {
 		lifeLeft = lifeTime
 	} else {
 		lifeLeft = deathTime.Sub(now)
 	}
+	size := ByteSize(fileInfo.Size())
 	data.Lock()
 	data.m[id] = PasteInfo{
 		ModTime:   modTime,
 		DeathTime: deathTime,
-		Size:      uncompSize,
+		Size:      size,
 	}
 	data.Unlock()
-	log.Printf("Recovered paste %s (%s) from %s has %s left", id, uncompSize, modTime, lifeLeft)
+	log.Printf("Recovered paste %s (%s) from %s has %s left", id, size, modTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
