@@ -200,7 +200,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		id := Id(strings.ToLower(rawId))
 		data.RLock()
 		pasteInfo, e := data.m[id]
-		data.RUnlock()
 		if !e {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
@@ -223,6 +222,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Etag", pasteInfo.Etag)
 		w.Header().Set("Content-Type", pasteInfo.ContentType)
 		http.ServeContent(w, r, "", pasteInfo.ModTime, pasteFile)
+		data.RUnlock()
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
