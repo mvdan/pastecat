@@ -91,6 +91,7 @@ func RandomId() (Id, error) {
 	s := make([]byte, idSize)
 	var id Id
 	data.RLock()
+	defer data.RUnlock()
 	for try := 0; try < randTries; try++ {
 		var offset int = 0
 	RandLoop:
@@ -108,7 +109,6 @@ func RandomId() (Id, error) {
 		}
 		id = Id(s)
 		if _, e := data.m[id]; !e {
-			data.RUnlock()
 			return id, nil
 		}
 	}
@@ -125,13 +125,12 @@ func (id Id) Path() string {
 
 func (id Id) EndLife() {
 	data.Lock()
+	defer data.Unlock()
 	err := os.Remove(id.Path())
 	if err == nil {
 		delete(data.m, id)
-		data.Unlock()
 		log.Printf("Removed paste: %s", id)
 	} else {
-		data.Unlock()
 		log.Printf("Could not end the life of %s: %s", id, err)
 		id.EndLifeAfter(2 * time.Minute)
 	}
@@ -205,6 +204,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		id := Id(strings.ToLower(rawId))
 		data.RLock()
+		defer data.RUnlock()
 		pasteInfo, e := data.m[id]
 		if !e {
 			w.WriteHeader(http.StatusNotFound)
@@ -228,7 +228,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Etag", pasteInfo.Etag)
 		w.Header().Set("Content-Type", pasteInfo.ContentType)
 		http.ServeContent(w, r, "", pasteInfo.ModTime, pasteFile)
-		data.RUnlock()
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -249,6 +248,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		var id Id
 		if id, err = RandomId(); err == nil {
 			data.Lock()
+			defer data.Unlock()
 		} else {
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -261,7 +261,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
-			data.Unlock()
 			return
 		}
 		deathTime := time.Now().Add(lifeTime)
@@ -271,7 +270,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Could not create new paste file %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
-			data.Unlock()
 			return
 		}
 		defer pasteFile.Close()
@@ -280,7 +278,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Could not write data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
-			data.Unlock()
 			return
 		}
 		writtenSize := ByteSize(b)
@@ -295,7 +292,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			pasteInfo.ContentType = "text-plain; charset=utf-8"
 		}
 		data.m[id] = pasteInfo
-		data.Unlock()
 		log.Printf("Created new paste %s (%s %s) to die at %s",
 			id, pasteInfo.ContentType, pasteInfo.Size, pasteInfo.DeathTime)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
