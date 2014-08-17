@@ -178,11 +178,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := Id(strings.ToLower(rawId))
-		_, e := pasteInfos[id]
+		pasteInfo, e := pasteInfos[id]
 		if !e {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
 			return
+		}
+		etag := fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
+		if inm := r.Header.Get("If-None-Match"); inm != "" {
+			if etag == inm || inm == "*" {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
 		}
 		pastePath := id.Path()
 		pasteFile, err := os.Open(pastePath)
@@ -192,6 +199,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer pasteFile.Close()
+		w.Header().Set("Etag", etag)
 		compReader, err := zlib.NewReader(pasteFile)
 		if err != nil {
 			log.Printf("Could not open a compression reader for %s: %s", pastePath, err)
