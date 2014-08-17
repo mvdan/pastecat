@@ -28,6 +28,7 @@ const (
 	indexTmpl = "index.html"
 	formTmpl  = "form.html"
 	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
+	randTries = 10
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -90,7 +91,7 @@ func RandomId() (Id, error) {
 	s := make([]byte, idSize)
 	var id Id
 	data.RLock()
-	for try := 0; try < 10; try++ {
+	for try := 0; try < randTries; try++ {
 		var offset int = 0
 	RandLoop:
 		for {
@@ -111,7 +112,7 @@ func RandomId() (Id, error) {
 			return id, nil
 		}
 	}
-	return id, errors.New("error")
+	return id, fmt.Errorf("Gave up trying to find an unused random id after %d tries", randTries)
 }
 
 func (id Id) String() string {
@@ -237,7 +238,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		var content string
 		id, err = RandomId()
 		if err != nil {
-			log.Printf("Gave up trying to find an unused random id")
+			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
