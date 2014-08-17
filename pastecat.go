@@ -310,13 +310,11 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	size := ByteSize(fileInfo.Size())
-	data.Lock()
 	data.m[id] = PasteInfo{
 		ModTime:   modTime,
 		DeathTime: deathTime,
 		Size:      size,
 	}
-	data.Unlock()
 	log.Printf("Recovered paste %s (%s) from %s has %s left", id, size, modTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
