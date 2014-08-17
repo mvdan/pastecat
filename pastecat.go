@@ -126,12 +126,13 @@ func (id Id) EndLife() {
 	err := os.Remove(id.Path())
 	if err == nil {
 		delete(data.m, id)
+		data.Unlock()
 		log.Printf("Removed paste: %s", id)
 	} else {
+		data.Unlock()
 		log.Printf("Could not end the life of %s: %s", id, err)
 		id.EndLifeAfter(2 * time.Minute)
 	}
-	data.Unlock()
 }
 
 func (id Id) EndLifeAfter(duration time.Duration) {
