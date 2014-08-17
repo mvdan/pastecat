@@ -47,6 +47,7 @@ var (
 	indexTemplate *template.Template
 	formTemplate  *template.Template
 	pasteInfos    = make(map[Id]PasteInfo)
+	customRand    *rand.Rand
 )
 
 func init() {
@@ -57,6 +58,7 @@ func init() {
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
 	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
 	validId = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
+	customRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
 type PasteInfo struct {
@@ -82,7 +84,7 @@ func RandomId() Id {
 	var offset int = 0
 MainLoop:
 	for {
-		r := rand.Int63()
+		r := customRand.Int63()
 		for i := 0; i < 8; i++ {
 			randbyte := int(r&0xff) % len(chars)
 			s[offset] = chars[randbyte]
@@ -203,7 +205,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var id Id
-		var pastePath, content string
+		var content string
 		found := false
 		for i := 0; i < 10; i++ {
 			id = RandomId()
@@ -231,6 +233,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
+		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
 		if err = os.MkdirAll(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
