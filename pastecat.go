@@ -219,8 +219,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		defer pasteFile.Close()
 		w.Header().Set("Etag", etag)
-		w.Header().Set("Last-Modified", pasteInfo.ModTime.Format(http.TimeFormat))
-		io.Copy(w, pasteFile)
+		w.Header().Set("Content-Type", "text-plain; charset=utf-8")
+		http.ServeContent(w, r, "", pasteInfo.ModTime, pasteFile)
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
