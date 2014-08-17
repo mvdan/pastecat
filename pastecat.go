@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -300,18 +301,33 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		go id.EndLife()
 		return nil
 	}
+	pasteFile, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer pasteFile.Close()
+	compReader, err := zlib.NewReader(pasteFile)
+	if err != nil {
+		return err
+	}
+	defer compReader.Close()
+	b, err := io.Copy(ioutil.Discard, compReader)
+	if err != nil {
+		return err
+	}
+	uncompSize := ByteSize(b)
 	var lifeLeft time.Duration
 	if deathTime.After(now.Add(lifeTime)) {
 		lifeLeft = lifeTime
 	} else {
 		lifeLeft = deathTime.Sub(now)
 	}
-	log.Printf("Recovered paste %s has %s left", id, lifeLeft)
 	pasteInfos[id] = PasteInfo{
 		ModTime:   modTime,
 		DeathTime: deathTime,
-		Size:      ByteSize(fileInfo.Size()),
+		Size:      uncompSize,
 	}
+	log.Printf("Recovered paste %s (%s) from %s has %s left", id, uncompSize, modTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
