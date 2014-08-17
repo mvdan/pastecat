@@ -328,6 +328,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
+	defer pasteFile.Close()
 	read := make([]byte, 512)
 	_, err = pasteFile.Read(read)
 	if err != nil {
@@ -381,5 +382,6 @@ func main() {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
 	}
 	http.HandleFunc("/", handler)
+	log.Printf("Up and running!")
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
