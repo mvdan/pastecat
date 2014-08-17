@@ -66,9 +66,11 @@ func init() {
 }
 
 type PasteInfo struct {
-	ModTime   time.Time
-	DeathTime time.Time
-	Size      ByteSize
+	ModTime     time.Time
+	DeathTime   time.Time
+	Size        ByteSize
+	Etag        string
+	ContentType string
 }
 
 type Id string
@@ -204,9 +206,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
 			return
 		}
-		etag := fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
 		if inm := r.Header.Get("If-None-Match"); inm != "" {
-			if etag == inm || inm == "*" {
+			if pasteInfo.Etag == inm || inm == "*" {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
@@ -219,8 +220,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer pasteFile.Close()
-		w.Header().Set("Etag", etag)
-		w.Header().Set("Content-Type", "text-plain; charset=utf-8")
+		w.Header().Set("Etag", pasteInfo.Etag)
+		w.Header().Set("Content-Type", pasteInfo.ContentType)
 		http.ServeContent(w, r, "", pasteInfo.ModTime, pasteFile)
 
 	case "POST":
@@ -273,14 +274,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writtenSize := ByteSize(b)
-		data.Lock()
-		data.m[id] = PasteInfo{
+		pasteInfo := PasteInfo{
 			ModTime:   time.Now(),
 			DeathTime: deathTime,
 			Size:      writtenSize,
 		}
+		pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
+		pasteInfo.ContentType = http.DetectContentType([]byte(content))
+		if pasteInfo.ContentType == "application/octet-stream" {
+			pasteInfo.ContentType = "text-plain; charset=utf-8"
+		}
+		data.Lock()
+		data.m[id] = pasteInfo
 		data.Unlock()
-		log.Printf("Created a new paste: %s (%s)", id, writtenSize)
+		log.Printf("Created new paste %s (%s %s) to die at %s",
+			id, pasteInfo.ContentType, pasteInfo.Size, pasteInfo.DeathTime)
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
@@ -310,12 +318,28 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	size := ByteSize(fileInfo.Size())
-	data.m[id] = PasteInfo{
+	pasteFile, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	read := make([]byte, 512)
+	_, err = pasteFile.Read(read)
+	if err != nil {
+		return err
+	}
+	pasteInfo := PasteInfo{
 		ModTime:   modTime,
 		DeathTime: deathTime,
 		Size:      size,
+		Etag:      fmt.Sprintf("%d-%s", modTime.Unix(), id),
 	}
-	log.Printf("Recovered paste %s (%s) from %s has %s left", id, size, modTime, lifeLeft)
+	pasteInfo.ContentType = http.DetectContentType(read)
+	if pasteInfo.ContentType == "application/octet-stream" {
+		pasteInfo.ContentType = "text-plain; charset=utf-8"
+	}
+	data.m[id] = pasteInfo
+	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
+		id, pasteInfo.ContentType, pasteInfo.Size, pasteInfo.ModTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
