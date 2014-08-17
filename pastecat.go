@@ -240,7 +240,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", err)
 			return
 		}
-		if vs, found := r.Form["paste"]; found {
+		if vs, found := r.Form["paste"]; found && len(vs[0]) > 0 {
 			content = vs[0]
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
