@@ -4,7 +4,9 @@ A very simple and self-hosted pastebin service written in Go. Stores
 zlib-compressed pastes in a filesystem hierarchy.
 
 Designed to remove pastes after a certain period of time. Upon restart, file
-modify times will be used to try to recover the removal time of each paste.
+modification times will be used to recover the removal time of each paste.
+
+More info in the [Landing page](index.html).
 
 #### Build
 
