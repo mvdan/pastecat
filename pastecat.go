@@ -38,14 +38,12 @@ const (
 )
 
 var (
-	siteUrl, listen, dataDir string
-	lifeTime                 time.Duration
-	maxSizeStr               string
-	maxSize                  ByteSize
+	siteUrl, listen, dataDir, maxSizeStr string
+	lifeTime                             time.Duration
+	maxSize                              ByteSize
+	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
-	indexTemplate *template.Template
-	formTemplate  *template.Template
 	data          = struct {
 		sync.RWMutex
 		m map[Id]PasteInfo
@@ -61,9 +59,8 @@ func init() {
 }
 
 type PasteInfo struct {
-	ModTime     time.Time
-	Etag        string
-	ContentType string
+	Path, Etag, ContentType string
+	ModTime                 time.Time
 }
 
 type Id [idSize / 2]byte
@@ -115,6 +112,16 @@ func (id Id) Path() string {
 	return path.Join(hexId[0:2], hexId[2:])
 }
 
+func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) {
+	pasteInfo.ModTime = modTime
+	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
+	pasteInfo.ContentType = http.DetectContentType(head)
+	if pasteInfo.ContentType == "application/octet-stream" {
+		pasteInfo.ContentType = "text-plain; charset=utf-8"
+	}
+	return
+}
+
 func (id Id) EndLife() {
 	data.Lock()
 	defer data.Unlock()
@@ -163,15 +170,14 @@ func parseByteSize(str string) (ByteSize, error) {
 func (b ByteSize) String() string {
 	switch {
 	case b >= MB:
-		return fmt.Sprintf("%.2f MB", float64(b)/float64(MB))
+		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
 	case b >= KB:
-		return fmt.Sprintf("%.2f KB", float64(b)/float64(KB))
+		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
 	}
-	return fmt.Sprintf("%d B", b)
+	return fmt.Sprintf("%dB", b)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	var err error
 	switch r.Method {
 	case "GET":
 		switch r.URL.Path {
@@ -208,8 +214,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		pastePath := id.Path()
-		pasteFile, err := os.Open(pastePath)
+		pasteFile, err := os.Open(id.Path())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
@@ -222,13 +227,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
-		var content string
-		if err = r.ParseMultipartForm(int64(maxSize)); err != nil {
+		if err := r.ParseMultipartForm(int64(maxSize)); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", err)
 			return
 		}
+		var content string
 		if vs, found := r.Form["paste"]; found && len(vs[0]) > 0 {
 			content = vs[0]
 		} else {
@@ -248,13 +253,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
-		if err = os.Mkdir(dir, 0700); err != nil {
+		if err := os.Mkdir(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
 		id.EndLifeAfter(lifeTime)
+		modTime := time.Now()
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			log.Printf("Could not create new paste file %s: %s", pastePath, err)
@@ -270,14 +276,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		pasteInfo := PasteInfo{
-			ModTime:   time.Now(),
-		}
-		pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-		pasteInfo.ContentType = http.DetectContentType([]byte(content))
-		if pasteInfo.ContentType == "application/octet-stream" {
-			pasteInfo.ContentType = "text-plain; charset=utf-8"
-		}
+		pasteInfo := id.GenPasteInfo(modTime, []byte(content))
 		data.m[id] = pasteInfo
 		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(b))
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
@@ -302,12 +301,6 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		go id.EndLife()
 		return nil
 	}
-	var lifeLeft time.Duration
-	if deathTime.After(now.Add(lifeTime)) {
-		lifeLeft = lifeTime
-	} else {
-		lifeLeft = deathTime.Sub(now)
-	}
 	pasteFile, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -318,14 +311,13 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
-	pasteInfo := PasteInfo{
-		ModTime:   modTime,
-		Etag:      fmt.Sprintf("%d-%s", modTime.Unix(), id),
+	var lifeLeft time.Duration
+	if deathTime.After(now.Add(lifeTime)) {
+		lifeLeft = lifeTime
+	} else {
+		lifeLeft = deathTime.Sub(now)
 	}
-	pasteInfo.ContentType = http.DetectContentType(read)
-	if pasteInfo.ContentType == "application/octet-stream" {
-		pasteInfo.ContentType = "text-plain; charset=utf-8"
-	}
+	pasteInfo := id.GenPasteInfo(modTime, read)
 	data.m[id] = pasteInfo
 	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
 		id, pasteInfo.ContentType, ByteSize(fileInfo.Size()), pasteInfo.ModTime, lifeLeft)
