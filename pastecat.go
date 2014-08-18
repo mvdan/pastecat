@@ -62,8 +62,6 @@ func init() {
 
 type PasteInfo struct {
 	ModTime     time.Time
-	DeathTime   time.Time
-	Size        ByteSize
 	Etag        string
 	ContentType string
 }
@@ -256,7 +254,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		deathTime := time.Now().Add(lifeTime)
 		id.EndLifeAfter(lifeTime)
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
@@ -273,11 +270,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", unknownError)
 			return
 		}
-		writtenSize := ByteSize(b)
 		pasteInfo := PasteInfo{
 			ModTime:   time.Now(),
-			DeathTime: deathTime,
-			Size:      writtenSize,
 		}
 		pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
 		pasteInfo.ContentType = http.DetectContentType([]byte(content))
@@ -285,8 +279,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			pasteInfo.ContentType = "text-plain; charset=utf-8"
 		}
 		data.m[id] = pasteInfo
-		log.Printf("Created new paste %s (%s %s) to die at %s",
-			id, pasteInfo.ContentType, pasteInfo.Size, pasteInfo.DeathTime)
+		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(b))
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
@@ -315,7 +308,6 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	} else {
 		lifeLeft = deathTime.Sub(now)
 	}
-	size := ByteSize(fileInfo.Size())
 	pasteFile, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -328,8 +320,6 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	}
 	pasteInfo := PasteInfo{
 		ModTime:   modTime,
-		DeathTime: deathTime,
-		Size:      size,
 		Etag:      fmt.Sprintf("%d-%s", modTime.Unix(), id),
 	}
 	pasteInfo.ContentType = http.DetectContentType(read)
@@ -338,7 +328,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	}
 	data.m[id] = pasteInfo
 	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
-		id, pasteInfo.ContentType, pasteInfo.Size, pasteInfo.ModTime, lifeLeft)
+		id, pasteInfo.ContentType, ByteSize(fileInfo.Size()), pasteInfo.ModTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
 	return nil
 }
