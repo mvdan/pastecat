@@ -4,13 +4,14 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"path"
@@ -25,7 +26,7 @@ import (
 const (
 	indexTmpl = "index.html"
 	formTmpl  = "form.html"
-	chars     = "abcdefghijklmnopqrstuvwxyz0123456789"
+	idSize    = 8
 	randTries = 10
 
 	// GET error messages
@@ -40,10 +41,8 @@ var (
 	siteUrl, listen, dataDir string
 	lifeTime                 time.Duration
 	maxSizeStr               string
-	idSize                   int
 	maxSize                  ByteSize
 
-	validId       *regexp.Regexp
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 	indexTemplate *template.Template
 	formTemplate  *template.Template
@@ -51,7 +50,6 @@ var (
 		sync.RWMutex
 		m map[Id]PasteInfo
 	}{m: make(map[Id]PasteInfo)}
-	customRand *rand.Rand
 )
 
 func init() {
@@ -60,9 +58,6 @@ func init() {
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
-	flag.IntVar(&idSize, "i", 8, "Size of the paste ids (between 6 and 256)")
-	validId = regexp.MustCompile("^[a-zA-Z0-9]{" + strconv.Itoa(idSize) + "}$")
-	customRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
 type PasteInfo struct {
@@ -73,41 +68,39 @@ type PasteInfo struct {
 	ContentType string
 }
 
-type Id string
+type Id [idSize / 2]byte
+
+func IdFromString(hexId string) (Id, error) {
+	var id Id
+	if len(hexId) != idSize {
+		return id, errors.New("Invalid id")
+	}
+	b, err := hex.DecodeString(hexId)
+	if err != nil || len(b) != idSize/2 {
+		return id, errors.New("Invalid id")
+	}
+	copy(id[:], b)
+	return id, nil
+}
 
 func IdFromPath(idPath string) (Id, error) {
+	var id Id
 	parts := strings.Split(idPath, string(filepath.Separator))
 	if len(parts) != 2 {
-		return "", errors.New("Found invalid number of directories at " + idPath)
+		return id, errors.New("Found invalid number of directories at " + idPath)
 	}
-	rawId := parts[0] + parts[1]
-	if !validId.MatchString(rawId) {
-		return "", errors.New("Found invalid id " + rawId)
-	}
-	return Id(rawId), nil
+	return IdFromString(parts[0] + parts[1])
 }
 
 func RandomId() (Id, error) {
-	s := make([]byte, idSize)
 	var id Id
 	data.RLock()
 	defer data.RUnlock()
 	for try := 0; try < randTries; try++ {
-		var offset int = 0
-	RandLoop:
-		for {
-			r := customRand.Int63()
-			for i := 0; i < 8; i++ {
-				randbyte := int(r&0xff) % len(chars)
-				s[offset] = chars[randbyte]
-				offset++
-				if offset == idSize {
-					break RandLoop
-				}
-				r >>= 8
-			}
+		_, err := rand.Read(id[:])
+		if err != nil {
+			return id, err
 		}
-		id = Id(s)
 		if _, e := data.m[id]; !e {
 			return id, nil
 		}
@@ -116,11 +109,12 @@ func RandomId() (Id, error) {
 }
 
 func (id Id) String() string {
-	return string(id)
+	return hex.EncodeToString(id[:])
 }
 
 func (id Id) Path() string {
-	return path.Join(string(id[0:2]), string(id[2:]))
+	hexId := id.String()
+	return path.Join(hexId[0:2], hexId[2:])
 }
 
 func (id Id) EndLife() {
@@ -196,13 +190,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			formTemplate.Execute(w, struct{ SiteUrl string }{siteUrl})
 			return
 		}
-		rawId := r.URL.Path[1:]
-		if !validId.MatchString(rawId) {
+		id, err := IdFromString(r.URL.Path[1:])
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
-		id := Id(strings.ToLower(rawId))
 		data.RLock()
 		defer data.RUnlock()
 		pasteInfo, e := data.m[id]
@@ -245,8 +238,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
-		var id Id
-		if id, err = RandomId(); err == nil {
+		id, err := RandomId()
+		if err == nil {
 			data.Lock()
 			defer data.Unlock()
 		} else {
@@ -307,7 +300,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	}
 	id, err := IdFromPath(filePath)
 	if err != nil {
-		return err
+		return errors.New("Found incompatible id at path " + filePath)
 	}
 	modTime := fileInfo.ModTime()
 	deathTime := modTime.Add(lifeTime)
@@ -353,9 +346,6 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 func main() {
 	var err error
 	flag.Parse()
-	if idSize < 6 || idSize > 256 {
-		log.Fatalf("Provided id size %d is not between 6 and 256", idSize)
-	}
 	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
 		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
@@ -371,7 +361,6 @@ func main() {
 	if err = os.Chdir(dataDir); err != nil {
 		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
 	}
-	log.Printf("idSize   = %d", idSize)
 	log.Printf("maxSize  = %s", maxSize)
 	log.Printf("siteUrl  = %s", siteUrl)
 	log.Printf("listen   = %s", listen)
