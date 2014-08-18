@@ -77,10 +77,10 @@ type Id string
 
 func IdFromPath(idPath string) (Id, error) {
 	parts := strings.Split(idPath, string(filepath.Separator))
-	if len(parts) != 3 {
+	if len(parts) != 2 {
 		return "", errors.New("Found invalid number of directories at " + idPath)
 	}
-	rawId := parts[0] + parts[1] + parts[2]
+	rawId := parts[0] + parts[1]
 	if !validId.MatchString(rawId) {
 		return "", errors.New("Found invalid id " + rawId)
 	}
@@ -120,7 +120,7 @@ func (id Id) String() string {
 }
 
 func (id Id) Path() string {
-	return path.Join(string(id[0:2]), string(id[2:4]), string(id[4:]))
+	return path.Join(string(id[0:2]), string(id[2:]))
 }
 
 func (id Id) EndLife() {
@@ -257,7 +257,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
-		if err = os.MkdirAll(dir, 0700); err != nil {
+		if err = os.Mkdir(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
