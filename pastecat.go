@@ -27,6 +27,7 @@ const (
 	indexTmpl = "index.html"
 	formTmpl  = "form.html"
 	idSize    = 8
+	rawIdSize = idSize / 2
 	randTries = 10
 
 	// GET error messages
@@ -44,11 +45,21 @@ var (
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
-	data          = struct {
-		sync.RWMutex
-		m map[Id]PasteInfo
-	}{m: make(map[Id]PasteInfo)}
 )
+
+type Id [rawIdSize]byte
+
+type PasteInfo struct {
+	Path, Etag, ContentType string
+	ModTime                 time.Time
+}
+
+type PasteSection struct {
+	adding, removing sync.RWMutex
+	m                map[Id]PasteInfo
+}
+
+var pasteSections [256]PasteSection
 
 func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
@@ -56,14 +67,11 @@ func init() {
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
+	for b, pasteSection := range pasteSections {
+		pasteSection.m = make(map[Id]PasteInfo)
+		pasteSections[b] = pasteSection
+	}
 }
-
-type PasteInfo struct {
-	Path, Etag, ContentType string
-	ModTime                 time.Time
-}
-
-type Id [idSize / 2]byte
 
 func IdFromString(hexId string) (Id, error) {
 	var id Id
@@ -71,7 +79,7 @@ func IdFromString(hexId string) (Id, error) {
 		return id, errors.New("Invalid id")
 	}
 	b, err := hex.DecodeString(hexId)
-	if err != nil || len(b) != idSize/2 {
+	if err != nil || len(b) != rawIdSize {
 		return id, errors.New("Invalid id")
 	}
 	copy(id[:], b)
@@ -87,16 +95,21 @@ func IdFromPath(idPath string) (Id, error) {
 	return IdFromString(parts[0] + parts[1])
 }
 
-func RandomId() (Id, error) {
+func RandomIdByte() (byte, error) {
+	var b [1]byte
+	_, err := rand.Read(b[:])
+	return b[0], err
+}
+
+func RandomId(b byte) (Id, error) {
 	var id Id
-	data.RLock()
-	defer data.RUnlock()
+	id[0] = b
+	pasteSection := pasteSections[b]
 	for try := 0; try < randTries; try++ {
-		_, err := rand.Read(id[:])
-		if err != nil {
+		if _, err := rand.Read(id[1:]); err != nil {
 			return id, err
 		}
-		if _, e := data.m[id]; !e {
+		if _, e := pasteSection.m[id]; !e {
 			return id, nil
 		}
 	}
@@ -123,11 +136,12 @@ func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) 
 }
 
 func (id Id) EndLife() {
-	data.Lock()
-	defer data.Unlock()
+	pasteSection := pasteSections[id[0]]
+	pasteSection.removing.Lock()
+	defer pasteSection.removing.Unlock()
 	err := os.Remove(id.Path())
 	if err == nil {
-		delete(data.m, id)
+		delete(pasteSection.m, id)
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
@@ -200,9 +214,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", invalidId)
 			return
 		}
-		data.RLock()
-		defer data.RUnlock()
-		pasteInfo, e := data.m[id]
+		pasteSection := pasteSections[id[0]]
+		pasteSection.removing.RLock()
+		defer pasteSection.removing.RUnlock()
+		pasteInfo, e := pasteSection.m[id]
 		if !e {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "%s\n", pasteNotFound)
@@ -241,11 +256,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s\n", missingForm)
 			return
 		}
-		id, err := RandomId()
-		if err == nil {
-			data.Lock()
-			defer data.Unlock()
-		} else {
+		b, err := RandomIdByte()
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s\n", unknownError)
+			return
+		}
+		pasteSection := pasteSections[b]
+		pasteSection.adding.Lock()
+		defer pasteSection.adding.Unlock()
+		id, err := RandomId(b)
+		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
@@ -253,7 +275,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
-		if err := os.Mkdir(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "%s\n", unknownError)
@@ -269,7 +291,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer pasteFile.Close()
-		b, err := io.WriteString(pasteFile, content)
+		written, err := io.WriteString(pasteFile, content)
 		if err != nil {
 			log.Printf("Could not write data into %s: %s", pastePath, err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -277,8 +299,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pasteInfo := id.GenPasteInfo(modTime, []byte(content))
-		data.m[id] = pasteInfo
-		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(b))
+		pasteSection.m[id] = pasteInfo
+		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
 }
@@ -318,7 +340,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	pasteInfo := id.GenPasteInfo(modTime, read)
-	data.m[id] = pasteInfo
+	pasteSections[id[0]].m[id] = pasteInfo
 	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
 		id, pasteInfo.ContentType, ByteSize(fileInfo.Size()), pasteInfo.ModTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
