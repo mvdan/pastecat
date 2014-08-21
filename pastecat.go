@@ -210,8 +210,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		id, err := IdFromString(r.URL.Path[1:])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "%s\n", invalidId)
+			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
 		pasteSection := pasteSections[id[0]]
@@ -219,8 +218,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer pasteSection.removing.RUnlock()
 		pasteInfo, e := pasteSection.m[id]
 		if !e {
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, "%s\n", pasteNotFound)
+			http.Error(w, pasteNotFound, http.StatusNotFound)
 			return
 		}
 		if inm := r.Header.Get("If-None-Match"); inm != "" {
@@ -231,8 +229,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		pasteFile, err := os.Open(id.Path())
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		defer pasteFile.Close()
@@ -244,23 +241,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		if err := r.ParseMultipartForm(int64(maxSize)); err != nil {
 			log.Printf("Could not parse POST multipart form: %s", err)
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "%s\n", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		var content string
 		if vs, found := r.Form["paste"]; found && len(vs[0]) > 0 {
 			content = vs[0]
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "%s\n", missingForm)
+			http.Error(w, missingForm, http.StatusBadRequest)
 			return
 		}
 		b, err := RandomIdByte()
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		pasteSection := pasteSections[b]
@@ -269,16 +263,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		id, err := RandomId(b)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		pastePath := id.Path()
 		dir, _ := path.Split(pastePath)
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		id.EndLifeAfter(lifeTime)
@@ -286,16 +278,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			log.Printf("Could not create new paste file %s: %s", pastePath, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		defer pasteFile.Close()
 		written, err := io.WriteString(pasteFile, content)
 		if err != nil {
 			log.Printf("Could not write data into %s: %s", pastePath, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "%s\n", unknownError)
+			http.Error(w, unknownError, http.StatusInternalServerError)
 			return
 		}
 		pasteInfo := id.GenPasteInfo(modTime, []byte(content))
