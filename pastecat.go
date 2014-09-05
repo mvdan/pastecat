@@ -55,8 +55,8 @@ type PasteInfo struct {
 }
 
 type PasteSection struct {
-	adding, removing sync.RWMutex
-	m                map[Id]PasteInfo
+	sync.RWMutex
+	m map[Id]PasteInfo
 }
 
 var pasteSections [256]PasteSection
@@ -137,8 +137,8 @@ func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) 
 
 func (id Id) EndLife() {
 	pasteSection := pasteSections[id[0]]
-	pasteSection.removing.Lock()
-	defer pasteSection.removing.Unlock()
+	pasteSection.Lock()
+	defer pasteSection.Unlock()
 	err := os.Remove(id.Path())
 	if err == nil {
 		delete(pasteSection.m, id)
@@ -214,8 +214,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pasteSection := pasteSections[id[0]]
-		pasteSection.removing.RLock()
-		defer pasteSection.removing.RUnlock()
+		pasteSection.RLock()
+		defer pasteSection.RUnlock()
 		pasteInfo, e := pasteSection.m[id]
 		if !e {
 			http.Error(w, pasteNotFound, http.StatusNotFound)
@@ -258,8 +258,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pasteSection := pasteSections[b]
-		pasteSection.adding.Lock()
-		defer pasteSection.adding.Unlock()
+		pasteSection.Lock()
+		defer pasteSection.Unlock()
 		id, err := RandomId(b)
 		if err != nil {
 			log.Println(err)
