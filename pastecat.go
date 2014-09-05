@@ -54,12 +54,10 @@ type PasteInfo struct {
 	ModTime                 time.Time
 }
 
-type PasteSection struct {
+var pastes struct {
 	sync.RWMutex
 	m map[Id]PasteInfo
 }
-
-var pasteSections [256]PasteSection
 
 func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
@@ -67,10 +65,7 @@ func init() {
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
-	for b, pasteSection := range pasteSections {
-		pasteSection.m = make(map[Id]PasteInfo)
-		pasteSections[b] = pasteSection
-	}
+	pastes.m = make(map[Id]PasteInfo)
 }
 
 func IdFromString(hexId string) (Id, error) {
@@ -95,21 +90,13 @@ func IdFromPath(idPath string) (Id, error) {
 	return IdFromString(parts[0] + parts[1])
 }
 
-func RandomIdByte() (byte, error) {
-	var b [1]byte
-	_, err := rand.Read(b[:])
-	return b[0], err
-}
-
-func RandomId(b byte) (Id, error) {
+func RandomId() (Id, error) {
 	var id Id
-	id[0] = b
-	pasteSection := pasteSections[b]
 	for try := 0; try < randTries; try++ {
-		if _, err := rand.Read(id[1:]); err != nil {
+		if _, err := rand.Read(id[:]); err != nil {
 			return id, err
 		}
-		if _, e := pasteSection.m[id]; !e {
+		if _, e := pastes.m[id]; !e {
 			return id, nil
 		}
 	}
@@ -136,12 +123,11 @@ func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) 
 }
 
 func (id Id) EndLife() {
-	pasteSection := pasteSections[id[0]]
-	pasteSection.Lock()
-	defer pasteSection.Unlock()
+	pastes.Lock()
+	defer pastes.Unlock()
 	err := os.Remove(id.Path())
 	if err == nil {
-		delete(pasteSection.m, id)
+		delete(pastes.m, id)
 		log.Printf("Removed paste: %s", id)
 	} else {
 		log.Printf("Could not end the life of %s: %s", id, err)
@@ -213,10 +199,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
-		pasteSection := pasteSections[id[0]]
-		pasteSection.RLock()
-		defer pasteSection.RUnlock()
-		pasteInfo, e := pasteSection.m[id]
+		pastes.RLock()
+		defer pastes.RUnlock()
+		pasteInfo, e := pastes.m[id]
 		if !e {
 			http.Error(w, pasteNotFound, http.StatusNotFound)
 			return
@@ -251,16 +236,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, missingForm, http.StatusBadRequest)
 			return
 		}
-		b, err := RandomIdByte()
-		if err != nil {
-			log.Println(err)
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		pasteSection := pasteSections[b]
-		pasteSection.Lock()
-		defer pasteSection.Unlock()
-		id, err := RandomId(b)
+		pastes.Lock()
+		defer pastes.Unlock()
+		id, err := RandomId()
 		if err != nil {
 			log.Println(err)
 			http.Error(w, unknownError, http.StatusInternalServerError)
@@ -289,7 +267,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pasteInfo := id.GenPasteInfo(modTime, []byte(content))
-		pasteSection.m[id] = pasteInfo
+		pastes.m[id] = pasteInfo
 		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
 		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
 	}
@@ -330,7 +308,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 		lifeLeft = deathTime.Sub(now)
 	}
 	pasteInfo := id.GenPasteInfo(modTime, read)
-	pasteSections[id[0]].m[id] = pasteInfo
+	pastes.m[id] = pasteInfo
 	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
 		id, pasteInfo.ContentType, ByteSize(fileInfo.Size()), pasteInfo.ModTime, lifeLeft)
 	id.EndLifeAfter(lifeLeft)
