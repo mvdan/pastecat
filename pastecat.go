@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -19,7 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,6 +27,7 @@ const (
 	idSize    = 8
 	rawIdSize = idSize / 2
 	randTries = 10
+	timeout   = 2 * time.Second
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -36,6 +35,9 @@ const (
 	unknownError  = "Something went terribly wrong."
 	// POST error messages
 	missingForm = "Paste could not be found inside the posted form."
+
+	// Common error messages
+	timedOut = "Request timed out."
 )
 
 var (
@@ -45,6 +47,11 @@ var (
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
+
+	get   = make(chan GetRequest)
+	post  = make(chan PostRequest)
+	recov = make(chan RecovRequest)
+	del   = make(chan Id)
 )
 
 type Id [rawIdSize]byte
@@ -54,9 +61,137 @@ type PasteInfo struct {
 	ModTime                 time.Time
 }
 
-var pastes struct {
-	sync.RWMutex
-	m map[Id]PasteInfo
+type GetRequest struct {
+	w    http.ResponseWriter
+	r    *http.Request
+	done chan struct{}
+	id   Id
+}
+
+type PostRequest struct {
+	w       http.ResponseWriter
+	r       *http.Request
+	done    chan struct{}
+	content []byte
+	modTime time.Time
+}
+
+type RecovRequest struct {
+	id       Id
+	filePath string
+	fileInfo os.FileInfo
+}
+
+func worker() {
+	m := make(map[Id]PasteInfo)
+	for {
+		var done chan struct{}
+		select {
+		case request := <-get:
+			done = request.done
+			pasteInfo, e := m[request.id]
+			if !e {
+				http.Error(request.w, pasteNotFound, http.StatusNotFound)
+				break
+			}
+			if inm := request.r.Header.Get("If-None-Match"); inm != "" {
+				if pasteInfo.Etag == inm || inm == "*" {
+					request.w.WriteHeader(http.StatusNotModified)
+					break
+				}
+			}
+			pasteFile, err := os.Open(request.id.Path())
+			if err != nil {
+				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			defer pasteFile.Close()
+			request.w.Header().Set("Etag", pasteInfo.Etag)
+			request.w.Header().Set("Content-Type", pasteInfo.ContentType)
+			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
+
+		case request := <-post:
+			done = request.done
+			id, err := RandomId(m)
+			if err != nil {
+				log.Println(err)
+				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			pastePath := id.Path()
+			dir, _ := path.Split(pastePath)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				log.Printf("Could not create directories leading to %s: %s", pastePath, err)
+				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			id.EndLifeAfter(lifeTime)
+			pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if err != nil {
+				log.Printf("Could not create new paste file %s: %s", pastePath, err)
+				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			defer pasteFile.Close()
+			written, err := pasteFile.Write(request.content)
+			if err != nil {
+				log.Printf("Could not write data into %s: %s", pastePath, err)
+				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			pasteInfo := id.GenPasteInfo(request.modTime, request.content)
+			m[id] = pasteInfo
+			log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
+			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
+
+		case request := <-recov:
+			now := time.Now()
+			modTime := request.fileInfo.ModTime()
+			deathTime := modTime.Add(lifeTime)
+			if deathTime.Before(now) {
+				err := os.Remove(request.filePath)
+				if err == nil {
+					log.Printf("Removed paste: %s", request.id)
+				} else {
+					log.Printf("Could not remove %s: %s", request.id, err)
+				}
+				break
+			}
+			if modTime.After(now) {
+				modTime = now
+			}
+			pasteFile, err := os.Open(request.filePath)
+			if err != nil {
+				log.Printf("Could not open paste %s: %s", request.id, err)
+				break
+			}
+			defer pasteFile.Close()
+			read := make([]byte, 512)
+			_, err = pasteFile.Read(read)
+			if err != nil {
+				log.Printf("Could not read paste %s: %s", request.id, err)
+				break
+			}
+			pasteInfo := request.id.GenPasteInfo(modTime, read)
+			m[request.id] = pasteInfo
+			log.Printf("Recovered paste %s (%s %s) from %s",
+				request.id, pasteInfo.ContentType, ByteSize(request.fileInfo.Size()), modTime)
+			request.id.EndLifeAfter(deathTime.Sub(now))
+
+		case id := <-del:
+			err := os.Remove(id.Path())
+			if err == nil {
+				delete(m, id)
+				log.Printf("Removed paste: %s", id)
+			} else {
+				log.Printf("Could not remove %s: %s", id, err)
+				id.EndLifeAfter(2 * time.Minute)
+			}
+		}
+		if done != nil {
+			done <- struct{}{}
+		}
+	}
 }
 
 func init() {
@@ -65,7 +200,6 @@ func init() {
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
-	pastes.m = make(map[Id]PasteInfo)
 }
 
 func IdFromString(hexId string) (Id, error) {
@@ -90,13 +224,13 @@ func IdFromPath(idPath string) (Id, error) {
 	return IdFromString(parts[0] + parts[1])
 }
 
-func RandomId() (Id, error) {
+func RandomId(m map[Id]PasteInfo) (Id, error) {
 	var id Id
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[:]); err != nil {
 			return id, err
 		}
-		if _, e := pastes.m[id]; !e {
+		if _, e := m[id]; !e {
 			return id, nil
 		}
 	}
@@ -122,24 +256,11 @@ func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) 
 	return
 }
 
-func (id Id) EndLife() {
-	pastes.Lock()
-	defer pastes.Unlock()
-	err := os.Remove(id.Path())
-	if err == nil {
-		delete(pastes.m, id)
-		log.Printf("Removed paste: %s", id)
-	} else {
-		log.Printf("Could not end the life of %s: %s", id, err)
-		id.EndLifeAfter(2 * time.Minute)
-	}
-}
-
 func (id Id) EndLifeAfter(duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
-		id.EndLife()
+		del <- id
 	}()
 }
 
@@ -178,13 +299,12 @@ func (b ByteSize) String() string {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	done := make(chan struct{})
 	switch r.Method {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, struct {
-				SiteUrl, LifeTime string
-			}{
+			indexTemplate.Execute(w, struct{ SiteUrl, LifeTime string }{
 				siteUrl,
 				fmt.Sprintf("%g hours and %g minutes", lifeTime.Hours(),
 					lifeTime.Minutes()-lifeTime.Hours()*60),
@@ -199,28 +319,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
-		pastes.RLock()
-		defer pastes.RUnlock()
-		pasteInfo, e := pastes.m[id]
-		if !e {
-			http.Error(w, pasteNotFound, http.StatusNotFound)
-			return
-		}
-		if inm := r.Header.Get("If-None-Match"); inm != "" {
-			if pasteInfo.Etag == inm || inm == "*" {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-		}
-		pasteFile, err := os.Open(id.Path())
-		if err != nil {
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		defer pasteFile.Close()
-		w.Header().Set("Etag", pasteInfo.Etag)
-		w.Header().Set("Content-Type", pasteInfo.ContentType)
-		http.ServeContent(w, r, "", pasteInfo.ModTime, pasteFile)
+		get <- GetRequest{id: id, w: w, r: r, done: done}
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -229,47 +328,24 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		var content string
+		var content []byte
 		if vs, found := r.Form["paste"]; found && len(vs[0]) > 0 {
-			content = vs[0]
+			content = []byte(vs[0])
 		} else {
 			http.Error(w, missingForm, http.StatusBadRequest)
 			return
 		}
-		pastes.Lock()
-		defer pastes.Unlock()
-		id, err := RandomId()
-		if err != nil {
-			log.Println(err)
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		pastePath := id.Path()
-		dir, _ := path.Split(pastePath)
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			log.Printf("Could not create directories leading to %s: %s", pastePath, err)
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		id.EndLifeAfter(lifeTime)
-		modTime := time.Now()
-		pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			log.Printf("Could not create new paste file %s: %s", pastePath, err)
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		defer pasteFile.Close()
-		written, err := io.WriteString(pasteFile, content)
-		if err != nil {
-			log.Printf("Could not write data into %s: %s", pastePath, err)
-			http.Error(w, unknownError, http.StatusInternalServerError)
-			return
-		}
-		pasteInfo := id.GenPasteInfo(modTime, []byte(content))
-		pastes.m[id] = pasteInfo
-		log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
-		fmt.Fprintf(w, "%s/%s\n", siteUrl, id)
+		post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}
+
+	default:
+		http.Error(w, "Unsupported action.", http.StatusBadRequest)
+		return
+	}
+	timer := time.NewTimer(timeout)
+	select {
+	case <-timer.C:
+		http.Error(w, timedOut, http.StatusRequestTimeout)
+	case <-done:
 	}
 }
 
@@ -284,34 +360,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return errors.New("Found incompatible id at path " + filePath)
 	}
-	modTime := fileInfo.ModTime()
-	deathTime := modTime.Add(lifeTime)
-	now := time.Now()
-	if deathTime.Before(now) {
-		go id.EndLife()
-		return nil
-	}
-	pasteFile, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer pasteFile.Close()
-	read := make([]byte, 512)
-	_, err = pasteFile.Read(read)
-	if err != nil {
-		return err
-	}
-	var lifeLeft time.Duration
-	if deathTime.After(now.Add(lifeTime)) {
-		lifeLeft = lifeTime
-	} else {
-		lifeLeft = deathTime.Sub(now)
-	}
-	pasteInfo := id.GenPasteInfo(modTime, read)
-	pastes.m[id] = pasteInfo
-	log.Printf("Recovered paste %s (%s %s) from %s has %s left",
-		id, pasteInfo.ContentType, ByteSize(fileInfo.Size()), pasteInfo.ModTime, lifeLeft)
-	id.EndLifeAfter(lifeLeft)
+	recov <- RecovRequest{id: id, filePath: filePath, fileInfo: fileInfo}
 	return nil
 }
 
@@ -338,6 +387,7 @@ func main() {
 	log.Printf("listen   = %s", listen)
 	log.Printf("dataDir  = %s", dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
+	go worker()
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
 	}
