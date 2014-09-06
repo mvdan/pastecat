@@ -57,8 +57,8 @@ var (
 type Id [rawIdSize]byte
 
 type PasteInfo struct {
-	Path, Etag, ContentType string
-	ModTime                 time.Time
+	Etag, ContentType string
+	ModTime           time.Time
 }
 
 type GetRequest struct {
