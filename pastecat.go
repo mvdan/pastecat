@@ -28,7 +28,6 @@ const (
 	idSize    = 8
 	rawIdSize = idSize / 2
 	randTries = 10
-	timeout   = 2 * time.Second
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -43,7 +42,7 @@ const (
 
 var (
 	siteUrl, listen, dataDir, maxSizeStr string
-	lifeTime                             time.Duration
+	lifeTime, timeout                    time.Duration
 	maxSize                              ByteSize
 	indexTemplate, formTemplate          *template.Template
 
@@ -199,8 +198,9 @@ func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
 	flag.StringVar(&listen, "l", "localhost:8080", "Host and port to listen to")
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
-	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes (units: s,m,h)")
-	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes (units: B,K,M)")
+	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
+	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
+	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
 }
 
 func IdFromString(hexId string) (Id, error) {
@@ -388,6 +388,7 @@ func main() {
 	log.Printf("listen   = %s", listen)
 	log.Printf("dataDir  = %s", dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
+	log.Printf("timeout  = %s", timeout)
 	go worker()
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
