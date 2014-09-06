@@ -82,12 +82,12 @@ type RecRequest struct {
 	fileInfo os.FileInfo
 }
 
-func worker(n byte) {
+func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id) {
 	m := make(map[Id]PasteInfo)
 	for {
 		var done chan struct{}
 		select {
-		case request := <-getN[n]:
+		case request := <-get:
 			done = request.done
 			pasteInfo, e := m[request.id]
 			if !e {
@@ -143,7 +143,7 @@ func worker(n byte) {
 			m[id] = pasteInfo
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
-		case request := <-recN[n]:
+		case request := <-rec:
 			now := time.Now()
 			modTime := request.fileInfo.ModTime()
 			deathTime := modTime.Add(lifeTime)
@@ -173,7 +173,7 @@ func worker(n byte) {
 			m[request.id] = pasteInfo
 			request.id.EndLifeAfter(deathTime.Sub(now))
 
-		case id := <-delN[n]:
+		case id := <-del:
 			err := os.Remove(id.Path())
 			if err == nil {
 				delete(m, id)
@@ -395,7 +395,7 @@ func main() {
 		getN[n] = make(chan GetRequest)
 		recN[n] = make(chan RecRequest)
 		delN[n] = make(chan Id)
-		go worker(byte(n))
+		go worker(byte(n), getN[n], recN[n], delN[n])
 	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
