@@ -119,12 +119,6 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 				break
 			}
 			pastePath := id.Path()
-			dir, _ := path.Split(pastePath)
-			if err := os.MkdirAll(dir, 0700); err != nil {
-				log.Printf("Could not create directories leading to %s: %s", pastePath, err)
-				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				break
-			}
 			pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pastePath, err)
@@ -392,7 +386,18 @@ func main() {
 		getN[n] = make(chan GetRequest)
 		recN[n] = make(chan RecRequest)
 		delN[n] = make(chan Id)
-		go worker(byte(n), getN[n], recN[n], delN[n])
+		b := byte(n)
+		dir := hex.EncodeToString([]byte{b})
+		if stat, err := os.Stat(dir); err == nil {
+			if !stat.IsDir() {
+				log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
+			}
+		} else {
+			if err := os.Mkdir(dir, 0700); err != nil {
+				log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
+			}
+		}
+		go worker(b, getN[n], recN[n], delN[n])
 	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
