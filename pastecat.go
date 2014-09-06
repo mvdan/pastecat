@@ -47,9 +47,7 @@ var (
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
-
 )
-
 
 var getN [256]chan GetRequest
 var recN [256]chan RecRequest
@@ -134,7 +132,7 @@ func worker(n byte) {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			written, err := pasteFile.Write(request.content)
+			_, err = pasteFile.Write(request.content)
 			pasteFile.Close()
 			if err != nil {
 				log.Printf("Could not write data into %s: %s", pastePath, err)
@@ -143,7 +141,6 @@ func worker(n byte) {
 			}
 			pasteInfo := id.GenPasteInfo(request.modTime, request.content)
 			m[id] = pasteInfo
-			log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case request := <-recN[n]:
@@ -152,9 +149,7 @@ func worker(n byte) {
 			deathTime := modTime.Add(lifeTime)
 			if deathTime.Before(now) {
 				err := os.Remove(request.filePath)
-				if err == nil {
-					log.Printf("Removed paste: %s", request.id)
-				} else {
+				if err != nil {
 					log.Printf("Could not remove %s: %s", request.id, err)
 				}
 				break
@@ -176,15 +171,12 @@ func worker(n byte) {
 			}
 			pasteInfo := request.id.GenPasteInfo(modTime, read)
 			m[request.id] = pasteInfo
-			log.Printf("Recovered paste %s (%s %s) from %s",
-				request.id, pasteInfo.ContentType, ByteSize(request.fileInfo.Size()), modTime)
 			request.id.EndLifeAfter(deathTime.Sub(now))
 
 		case id := <-delN[n]:
 			err := os.Remove(id.Path())
 			if err == nil {
 				delete(m, id)
-				log.Printf("Removed paste: %s", id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
 				id.EndLifeAfter(2 * time.Minute)
@@ -335,7 +327,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		if err := r.ParseMultipartForm(int64(maxSize)); err != nil {
-			log.Printf("Could not parse POST multipart form: %s", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
