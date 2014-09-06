@@ -33,8 +33,6 @@ const (
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
 	unknownError  = "Something went terribly wrong."
-	// POST error messages
-	missingForm = "Paste could not be found inside the posted form."
 
 	// Common error messages
 	timedOut = "Request timed out."
@@ -323,7 +321,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
 		case workers[id[0]].get <- GetRequest{id: id, w: w, r: r, done: done}:
-			// request is sent
 			timer.Stop()
 		}
 
@@ -338,18 +335,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			ext = strings.ToLower(filepath.Ext(h.Filename))
 			f.Close()
 			if err != nil {
-				http.Error(w, missingForm, http.StatusBadRequest)
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 		} else {
-			http.Error(w, missingForm, http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
 		case post <- PostRequest{content: content, ext: ext, modTime: time.Now(), w: w, r: r, done: done}:
-			// request is sent
 			timer.Stop()
 		}
 
