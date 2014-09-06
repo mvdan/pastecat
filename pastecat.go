@@ -64,8 +64,8 @@ var post = make(chan PostRequest) // Posting is shared to balance load
 type Id [rawIdSize]byte
 
 type PasteInfo struct {
-	Etag, ContentType, Ext string
-	ModTime                time.Time
+	Etag, ContentType, Path string
+	ModTime                 time.Time
 }
 
 type GetRequest struct {
@@ -98,9 +98,15 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if fileInfo.IsDir() {
 		return nil
 	}
-	id, err := IdFromPath(filePath)
+	dirParts := strings.Split(filePath, string(filepath.Separator))
+	if len(dirParts) != 2 {
+		return errors.New("Found invalid number of directories at " + filePath)
+	}
+	hexId := dirParts[0] + dirParts[1]
+	ext := filepath.Ext(hexId)
+	id, err := IdFromString(hexId[:len(hexId)-len(ext)])
 	if err != nil {
-		return errors.New("Found incompatible id at path " + filePath)
+		return err
 	}
 	modTime := fileInfo.ModTime()
 	deathTime := modTime.Add(lifeTime)
@@ -113,7 +119,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	w.m[id] = id.GenPasteInfo(modTime, "")
+	w.m[id] = id.GenPasteInfo(modTime, ext)
 	w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	return nil
 }
@@ -163,7 +169,7 @@ func (w Worker) Work() {
 					break
 				}
 			}
-			pasteFile, err := os.Open(request.id.Path())
+			pasteFile, err := os.Open(pasteInfo.Path)
 			if err != nil {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
@@ -181,26 +187,27 @@ func (w Worker) Work() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			pastePath := id.Path()
-			pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			pasteInfo := id.GenPasteInfo(request.modTime, request.ext)
+			pasteFile, err := os.OpenFile(pasteInfo.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
-				log.Printf("Could not create new paste file %s: %s", pastePath, err)
+				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
 			_, err = pasteFile.Write(request.content)
 			pasteFile.Close()
 			if err != nil {
-				log.Printf("Could not write data into %s: %s", pastePath, err)
+				log.Printf("Could not write data into %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			w.m[id] = id.GenPasteInfo(request.modTime, request.ext)
+			w.m[id] = pasteInfo
 			w.DeletePasteAfter(id, lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case id := <-w.del:
-			if err := os.Remove(id.Path()); err == nil {
+			pasteInfo, _ := w.m[id]
+			if err := os.Remove(pasteInfo.Path); err == nil {
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
@@ -225,42 +232,29 @@ func init() {
 func IdFromString(hexId string) (Id, error) {
 	var id Id
 	if len(hexId) != idSize {
-		return id, errors.New("Invalid id")
+		return id, errors.New("Invalid id at " + hexId)
 	}
 	b, err := hex.DecodeString(hexId)
 	if err != nil || len(b) != rawIdSize {
-		return id, errors.New("Invalid id")
+		return id, errors.New("Invalid id at " + hexId)
 	}
 	copy(id[:], b)
 	return id, nil
-}
-
-func IdFromPath(idPath string) (Id, error) {
-	var id Id
-	parts := strings.Split(idPath, string(filepath.Separator))
-	if len(parts) != 2 {
-		return id, errors.New("Found invalid number of directories at " + idPath)
-	}
-	return IdFromString(parts[0] + parts[1])
 }
 
 func (id Id) String() string {
 	return hex.EncodeToString(id[:])
 }
 
-func (id Id) Path() string {
-	hexId := id.String()
-	return path.Join(hexId[0:2], hexId[2:])
-}
-
 func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-	pasteInfo.Ext = strings.ToLower(ext)
 	var e bool
-	if pasteInfo.ContentType, e = mimeTypes[pasteInfo.Ext]; !e {
+	if pasteInfo.ContentType, e = mimeTypes[ext]; !e {
 		pasteInfo.ContentType = "text-plain; charset=utf-8"
 	}
+	hexId := id.String()
+	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:] + ext)
 	return
 }
 
@@ -341,7 +335,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			content = []byte(value)
 		} else if f, h, err := r.FormFile("paste"); err == nil {
 			content, err = ioutil.ReadAll(f)
-			ext = filepath.Ext(h.Filename)
+			ext = strings.ToLower(filepath.Ext(h.Filename))
 			f.Close()
 			if err != nil {
 				http.Error(w, missingForm, http.StatusBadRequest)
