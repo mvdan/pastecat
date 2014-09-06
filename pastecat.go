@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -335,13 +336,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
-		if err := r.ParseMultipartForm(int64(maxSize)); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
 		var content []byte
-		if vs, found := r.Form["paste"]; found && len(vs[0]) > 0 {
-			content = []byte(vs[0])
+		if value := r.FormValue("paste"); value != "" {
+			content = []byte(value)
+		} else if f, _, err := r.FormFile("paste"); err == nil {
+			content, err = ioutil.ReadAll(f)
+			f.Close()
+			if err != nil {
+				http.Error(w, missingForm, http.StatusBadRequest)
+				return
+			}
 		} else {
 			http.Error(w, missingForm, http.StatusBadRequest)
 			return

@@ -1,9 +1,15 @@
 <html>
 <body>
 	<form action="{{.SiteUrl}}" method="post" enctype="multipart/form-data">
-		<textarea cols=80 rows=32 name="paste"></textarea>
+		<textarea cols=80 rows=24 name="paste"></textarea>
 		<br/>
-		<button type="submit">Paste</button>
+		<button type="submit">Paste text</button>
+	</form>
+	<br/>
+	<form action="{{.SiteUrl}}" method="post" enctype="multipart/form-data">
+		<input type="file" name="paste"></input>
+		<br/>
+		<button type="submit">Paste file</button>
 	</form>
 </body>
 </html>
