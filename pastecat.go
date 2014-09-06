@@ -125,7 +125,6 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			id.EndLifeAfter(lifeTime)
 			pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pastePath, err)
@@ -140,6 +139,7 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 				break
 			}
 			m[id] = id.GenPasteInfo(request.modTime, request.content)
+			id.EndLifeAfter(lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case request := <-rec:
