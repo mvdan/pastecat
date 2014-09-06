@@ -293,10 +293,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			indexTemplate.Execute(w, struct{ SiteUrl, LifeTime string }{
-				siteUrl,
-				fmt.Sprintf("%g hours and %g minutes", lifeTime.Hours(),
-					lifeTime.Minutes()-lifeTime.Hours()*60),
-			})
+				siteUrl, lifeTime.String()})
 			return
 		case "/form":
 			formTemplate.Execute(w, struct{ SiteUrl string }{siteUrl})
