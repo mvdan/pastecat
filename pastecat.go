@@ -301,6 +301,7 @@ func (b ByteSize) String() string {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{})
+	timer := time.NewTimer(timeout)
 	switch r.Method {
 	case "GET":
 		switch r.URL.Path {
@@ -320,7 +321,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
-		get <- GetRequest{id: id, w: w, r: r, done: done}
+		select {
+		case <-timer.C:
+			http.Error(w, timedOut, http.StatusRequestTimeout)
+		case get <- GetRequest{id: id, w: w, r: r, done: done}:
+			// request is sent
+			timer.Stop()
+		}
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -336,18 +343,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, missingForm, http.StatusBadRequest)
 			return
 		}
-		post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}
+		select {
+		case <-timer.C:
+			http.Error(w, timedOut, http.StatusRequestTimeout)
+		case post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
+			// request is sent
+			timer.Stop()
+		}
 
 	default:
 		http.Error(w, "Unsupported action.", http.StatusBadRequest)
 		return
 	}
-	timer := time.NewTimer(timeout)
-	select {
-	case <-timer.C:
-		http.Error(w, timedOut, http.StatusRequestTimeout)
-	case <-done:
-	}
+	<-done
 }
 
 func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
