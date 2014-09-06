@@ -53,7 +53,6 @@ var (
 var getN [256]chan GetRequest
 var delN [256]chan Id
 var post = make(chan PostRequest) // Posting is shared to balance load
-var mapN [256]map[Id]PasteInfo // Used at startup in a controlled way
 
 type Id [rawIdSize]byte
 
@@ -77,7 +76,15 @@ type PostRequest struct {
 	modTime time.Time
 }
 
-func recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
+type Worker struct {
+	n byte // Its number, aka the first two hex chars
+	get <-chan GetRequest
+	post <-chan PostRequest
+	del <-chan Id
+	m map[Id]PasteInfo
+}
+
+func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
@@ -109,13 +116,27 @@ func recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil && err != io.EOF {
 		return err
 	}
-	mapN[id[0]][id] = id.GenPasteInfo(modTime, buf)
+	w.m[id] = id.GenPasteInfo(modTime, buf)
 	id.EndLifeAfter(deathTime.Sub(startTime))
 	return nil
 }
 
-func worker(n byte) {
-	dir := hex.EncodeToString([]byte{n})
+func (w Worker) RandomId() (Id, error) {
+	var id Id
+	id[0] = w.n
+	for try := 0; try < randTries; try++ {
+		if _, err := rand.Read(id[1:]); err != nil {
+			return id, err
+		}
+		if _, e := w.m[id]; !e {
+			return id, nil
+		}
+	}
+	return id, fmt.Errorf("Gave up trying to find an unused random id after %d tries", randTries)
+}
+
+func (w Worker) Work() {
+	dir := hex.EncodeToString([]byte{w.n})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
 			log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
@@ -125,19 +146,16 @@ func worker(n byte) {
 			log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
 		}
 	}
-	getN[n] = make(chan GetRequest)
-	delN[n] = make(chan Id)
-	mapN[n] = make(map[Id]PasteInfo)
-	get, del, m := getN[n], delN[n], mapN[n]
-	if err := filepath.Walk(dir, recoverPaste); err != nil {
+	w.m = make(map[Id]PasteInfo)
+	if err := filepath.Walk(dir, w.recoverPaste); err != nil {
 		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
 	}
 	for {
 		var done chan struct{}
 		select {
-		case request := <-get:
+		case request := <-w.get:
 			done = request.done
-			pasteInfo, e := m[request.id]
+			pasteInfo, e := w.m[request.id]
 			if !e {
 				http.Error(request.w, pasteNotFound, http.StatusNotFound)
 				break
@@ -158,9 +176,9 @@ func worker(n byte) {
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
 			pasteFile.Close()
 
-		case request := <-post:
+		case request := <-w.post:
 			done = request.done
-			id, err := RandomId(n, m)
+			id, err := w.RandomId()
 			if err != nil {
 				log.Println(err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
@@ -180,12 +198,13 @@ func worker(n byte) {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			m[id] = id.GenPasteInfo(request.modTime, request.content)
+			w.m[id] = id.GenPasteInfo(request.modTime, request.content)
 			id.EndLifeAfter(lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
-		case id := <-del:
+
+		case id := <-w.del:
 			if err := os.Remove(id.Path()); err == nil {
-				delete(m, id)
+				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
 				id.EndLifeAfter(2 * time.Minute)
@@ -226,20 +245,6 @@ func IdFromPath(idPath string) (Id, error) {
 		return id, errors.New("Found invalid number of directories at " + idPath)
 	}
 	return IdFromString(parts[0] + parts[1])
-}
-
-func RandomId(n byte, m map[Id]PasteInfo) (Id, error) {
-	var id Id
-	id[0] = n
-	for try := 0; try < randTries; try++ {
-		if _, err := rand.Read(id[1:]); err != nil {
-			return id, err
-		}
-		if _, e := m[id]; !e {
-			return id, nil
-		}
-	}
-	return id, fmt.Errorf("Gave up trying to find an unused random id after %d tries", randTries)
 }
 
 func (id Id) String() string {
@@ -383,7 +388,10 @@ func main() {
 	log.Printf("lifeTime = %s", lifeTime)
 	log.Printf("timeout  = %s", timeout)
 	for n := 0; n < 256; n++ {
-		go worker(byte(n))
+		getN[n] = make(chan GetRequest)
+		delN[n] = make(chan Id)
+		w := Worker{n: byte(n), get: getN[n], post: post, del: delN[n]}
+		go w.Work()
 	}
 	http.HandleFunc("/", handler)
 	log.Printf("Up and running!")
