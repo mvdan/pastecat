@@ -247,8 +247,7 @@ func (id Id) String() string {
 func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-	var e bool
-	if pasteInfo.ContentType, e = mimeTypes[ext]; !e {
+	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
 		pasteInfo.ContentType = "text-plain; charset=utf-8"
 	}
 	hexId := id.String()
@@ -278,7 +277,6 @@ func parseByteSize(str string) (ByteSize, error) {
 	}
 	parts := regexByteSize.FindStringSubmatch(str)
 	size, _ := strconv.ParseFloat(string(parts[1]), 64)
-
 	switch string(parts[2]) {
 	case "KB", "K":
 		size *= float64(KB)
