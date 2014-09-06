@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -168,7 +169,7 @@ func worker() {
 			defer pasteFile.Close()
 			read := make([]byte, 512)
 			_, err = pasteFile.Read(read)
-			if err != nil {
+			if err != nil && err != io.EOF {
 				log.Printf("Could not read paste %s: %s", request.id, err)
 				break
 			}
