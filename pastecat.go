@@ -50,10 +50,10 @@ var (
 
 // Default is "text-plain; charset=utf-8"
 var mimeTypes = map[string]string{
-	".gif":  "image/gif",
-	".jpg":  "image/jpeg",
-	".png":  "image/png",
-	".pdf":  "application/pdf",
+	".gif": "image/gif",
+	".jpg": "image/jpeg",
+	".png": "image/png",
+	".pdf": "application/pdf",
 }
 
 var workers [256]Worker
@@ -83,10 +83,10 @@ type PostRequest struct {
 }
 
 type Worker struct {
-	n    byte // Its number, aka the first two hex chars
-	get  chan GetRequest
-	del  chan Id
-	m    map[Id]PasteInfo
+	n   byte // Its number, aka the first two hex chars
+	get chan GetRequest
+	del chan Id
+	m   map[Id]PasteInfo
 }
 
 func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
@@ -252,7 +252,7 @@ func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 		pasteInfo.ContentType = "text-plain; charset=utf-8"
 	}
 	hexId := id.String()
-	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:] + ext)
+	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:]+ext)
 	return
 }
 
