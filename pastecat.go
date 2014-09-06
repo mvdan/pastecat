@@ -47,11 +47,10 @@ var (
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
-	startTime = time.Now()
+	startTime     = time.Now()
 )
 
-var getN [256]chan GetRequest
-var delN [256]chan Id
+var workers [256]Worker
 var post = make(chan PostRequest) // Posting is shared to balance load
 
 type Id [rawIdSize]byte
@@ -77,11 +76,11 @@ type PostRequest struct {
 }
 
 type Worker struct {
-	n byte // Its number, aka the first two hex chars
-	get <-chan GetRequest
-	post <-chan PostRequest
-	del <-chan Id
-	m map[Id]PasteInfo
+	n    byte // Its number, aka the first two hex chars
+	get  chan GetRequest
+	post chan PostRequest
+	del  chan Id
+	m    map[Id]PasteInfo
 }
 
 func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
@@ -117,7 +116,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	w.m[id] = id.GenPasteInfo(modTime, buf)
-	id.EndLifeAfter(deathTime.Sub(startTime))
+	w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	return nil
 }
 
@@ -199,7 +198,7 @@ func (w Worker) Work() {
 				break
 			}
 			w.m[id] = id.GenPasteInfo(request.modTime, request.content)
-			id.EndLifeAfter(lifeTime)
+			w.DeletePasteAfter(id, lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case id := <-w.del:
@@ -207,7 +206,7 @@ func (w Worker) Work() {
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
-				id.EndLifeAfter(2 * time.Minute)
+				w.DeletePasteAfter(id, 2*time.Minute)
 			}
 		}
 		if done != nil {
@@ -266,11 +265,11 @@ func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) 
 	return
 }
 
-func (id Id) EndLifeAfter(duration time.Duration) {
+func (w Worker) DeletePasteAfter(id Id, duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
-		delN[id[0]] <- id
+		w.del <- id
 	}()
 }
 
@@ -330,7 +329,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case getN[id[0]] <- GetRequest{id: id, w: w, r: r, done: done}:
+		case workers[id[0]].get <- GetRequest{id: id, w: w, r: r, done: done}:
 			// request is sent
 			timer.Stop()
 		}
@@ -387,10 +386,12 @@ func main() {
 	log.Printf("dataDir  = %s", dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
 	log.Printf("timeout  = %s", timeout)
-	for n := 0; n < 256; n++ {
-		getN[n] = make(chan GetRequest)
-		delN[n] = make(chan Id)
-		w := Worker{n: byte(n), get: getN[n], post: post, del: delN[n]}
+	for n := range workers {
+		w := &workers[n]
+		w.n = byte(n)
+		w.get = make(chan GetRequest)
+		w.post = post
+		w.del = make(chan Id)
 		go w.Work()
 	}
 	http.HandleFunc("/", handler)
