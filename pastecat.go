@@ -78,7 +78,6 @@ type PostRequest struct {
 type Worker struct {
 	n    byte // Its number, aka the first two hex chars
 	get  chan GetRequest
-	post chan PostRequest
 	del  chan Id
 	m    map[Id]PasteInfo
 }
@@ -175,7 +174,7 @@ func (w Worker) Work() {
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
 			pasteFile.Close()
 
-		case request := <-w.post:
+		case request := <-post:
 			done = request.done
 			id, err := w.RandomId()
 			if err != nil {
@@ -390,7 +389,6 @@ func main() {
 		w := &workers[n]
 		w.n = byte(n)
 		w.get = make(chan GetRequest)
-		w.post = post
 		w.del = make(chan Id)
 		go w.Work()
 	}
