@@ -48,11 +48,13 @@ var (
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
 
-	get   = make(chan GetRequest)
-	post  = make(chan PostRequest)
-	recov = make(chan RecovRequest)
-	del   = make(chan Id)
 )
+
+
+var getN [256]chan GetRequest
+var recN [256]chan RecRequest
+var delN [256]chan Id
+var post = make(chan PostRequest) // Posting is shared to balance load
 
 type Id [rawIdSize]byte
 
@@ -76,18 +78,18 @@ type PostRequest struct {
 	modTime time.Time
 }
 
-type RecovRequest struct {
+type RecRequest struct {
 	id       Id
 	filePath string
 	fileInfo os.FileInfo
 }
 
-func worker() {
+func worker(n byte) {
 	m := make(map[Id]PasteInfo)
 	for {
 		var done chan struct{}
 		select {
-		case request := <-get:
+		case request := <-getN[n]:
 			done = request.done
 			pasteInfo, e := m[request.id]
 			if !e {
@@ -112,7 +114,7 @@ func worker() {
 
 		case request := <-post:
 			done = request.done
-			id, err := RandomId(m)
+			id, err := RandomId(n, m)
 			if err != nil {
 				log.Println(err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
@@ -144,7 +146,7 @@ func worker() {
 			log.Printf("Created new paste %s (%s %s)", id, pasteInfo.ContentType, ByteSize(written))
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
-		case request := <-recov:
+		case request := <-recN[n]:
 			now := time.Now()
 			modTime := request.fileInfo.ModTime()
 			deathTime := modTime.Add(lifeTime)
@@ -178,7 +180,7 @@ func worker() {
 				request.id, pasteInfo.ContentType, ByteSize(request.fileInfo.Size()), modTime)
 			request.id.EndLifeAfter(deathTime.Sub(now))
 
-		case id := <-del:
+		case id := <-delN[n]:
 			err := os.Remove(id.Path())
 			if err == nil {
 				delete(m, id)
@@ -225,10 +227,11 @@ func IdFromPath(idPath string) (Id, error) {
 	return IdFromString(parts[0] + parts[1])
 }
 
-func RandomId(m map[Id]PasteInfo) (Id, error) {
+func RandomId(n byte, m map[Id]PasteInfo) (Id, error) {
 	var id Id
+	id[0] = n
 	for try := 0; try < randTries; try++ {
-		if _, err := rand.Read(id[:]); err != nil {
+		if _, err := rand.Read(id[1:]); err != nil {
 			return id, err
 		}
 		if _, e := m[id]; !e {
@@ -261,7 +264,7 @@ func (id Id) EndLifeAfter(duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
-		del <- id
+		delN[id[0]] <- id
 	}()
 }
 
@@ -324,7 +327,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case get <- GetRequest{id: id, w: w, r: r, done: done}:
+		case getN[id[0]] <- GetRequest{id: id, w: w, r: r, done: done}:
 			// request is sent
 			timer.Stop()
 		}
@@ -369,7 +372,7 @@ func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return errors.New("Found incompatible id at path " + filePath)
 	}
-	recov <- RecovRequest{id: id, filePath: filePath, fileInfo: fileInfo}
+	recN[id[0]] <- RecRequest{id: id, filePath: filePath, fileInfo: fileInfo}
 	return nil
 }
 
@@ -397,7 +400,12 @@ func main() {
 	log.Printf("dataDir  = %s", dataDir)
 	log.Printf("lifeTime = %s", lifeTime)
 	log.Printf("timeout  = %s", timeout)
-	go worker()
+	for n := 0; n < 256; n++ {
+		getN[n] = make(chan GetRequest)
+		recN[n] = make(chan RecRequest)
+		delN[n] = make(chan Id)
+		go worker(byte(n))
+	}
 	if err = filepath.Walk(".", walkFunc); err != nil {
 		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
 	}
