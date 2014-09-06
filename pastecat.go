@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -51,14 +50,22 @@ var (
 	startTime     = time.Now()
 )
 
+// Default is "text-plain; charset=utf-8"
+var mimeTypes = map[string]string{
+	".gif":  "image/gif",
+	".jpg":  "image/jpeg",
+	".png":  "image/png",
+	".pdf":  "application/pdf",
+}
+
 var workers [256]Worker
 var post = make(chan PostRequest) // Posting is shared to balance load
 
 type Id [rawIdSize]byte
 
 type PasteInfo struct {
-	Etag, ContentType string
-	ModTime           time.Time
+	Etag, ContentType, Ext string
+	ModTime                time.Time
 }
 
 type GetRequest struct {
@@ -73,6 +80,7 @@ type PostRequest struct {
 	r       *http.Request
 	done    chan struct{}
 	content []byte
+	ext     string
 	modTime time.Time
 }
 
@@ -105,17 +113,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	pasteFile, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	buf := make([]byte, 512)
-	_, err = pasteFile.Read(buf)
-	pasteFile.Close()
-	if err != nil && err != io.EOF {
-		return err
-	}
-	w.m[id] = id.GenPasteInfo(modTime, buf)
+	w.m[id] = id.GenPasteInfo(modTime, "")
 	w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	return nil
 }
@@ -197,7 +195,7 @@ func (w Worker) Work() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			w.m[id] = id.GenPasteInfo(request.modTime, request.content)
+			w.m[id] = id.GenPasteInfo(request.modTime, request.ext)
 			w.DeletePasteAfter(id, lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
@@ -255,11 +253,12 @@ func (id Id) Path() string {
 	return path.Join(hexId[0:2], hexId[2:])
 }
 
-func (id Id) GenPasteInfo(modTime time.Time, head []byte) (pasteInfo PasteInfo) {
+func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-	pasteInfo.ContentType = http.DetectContentType(head)
-	if pasteInfo.ContentType == "application/octet-stream" {
+	pasteInfo.Ext = strings.ToLower(ext)
+	var e bool
+	if pasteInfo.ContentType, e = mimeTypes[pasteInfo.Ext]; !e {
 		pasteInfo.ContentType = "text-plain; charset=utf-8"
 	}
 	return
@@ -337,10 +336,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var content []byte
+		ext := ""
 		if value := r.FormValue("paste"); value != "" {
 			content = []byte(value)
-		} else if f, _, err := r.FormFile("paste"); err == nil {
+		} else if f, h, err := r.FormFile("paste"); err == nil {
 			content, err = ioutil.ReadAll(f)
+			ext = filepath.Ext(h.Filename)
 			f.Close()
 			if err != nil {
 				http.Error(w, missingForm, http.StatusBadRequest)
@@ -353,7 +354,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
+		case post <- PostRequest{content: content, ext: ext, modTime: time.Now(), w: w, r: r, done: done}:
 			// request is sent
 			timer.Stop()
 		}
