@@ -47,12 +47,13 @@ var (
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
+	startTime = time.Now()
 )
 
 var getN [256]chan GetRequest
-var recN [256]chan RecRequest
 var delN [256]chan Id
 var post = make(chan PostRequest) // Posting is shared to balance load
+var mapN [256]map[Id]PasteInfo // Used at startup in a controlled way
 
 type Id [rawIdSize]byte
 
@@ -76,14 +77,61 @@ type PostRequest struct {
 	modTime time.Time
 }
 
-type RecRequest struct {
-	id       Id
-	filePath string
-	fileInfo os.FileInfo
+func recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+	if fileInfo.IsDir() {
+		return nil
+	}
+	id, err := IdFromPath(filePath)
+	if err != nil {
+		return errors.New("Found incompatible id at path " + filePath)
+	}
+	modTime := fileInfo.ModTime()
+	deathTime := modTime.Add(lifeTime)
+	if deathTime.Before(startTime) {
+		err := os.Remove(filePath)
+		if err != nil {
+			return err
+		}
+	}
+	if modTime.After(startTime) {
+		modTime = startTime
+	}
+	pasteFile, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	buf := make([]byte, 512)
+	_, err = pasteFile.Read(buf)
+	pasteFile.Close()
+	if err != nil && err != io.EOF {
+		return err
+	}
+	mapN[id[0]][id] = id.GenPasteInfo(modTime, buf)
+	id.EndLifeAfter(deathTime.Sub(startTime))
+	return nil
 }
 
-func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id) {
-	m := make(map[Id]PasteInfo)
+func worker(n byte) {
+	dir := hex.EncodeToString([]byte{n})
+	if stat, err := os.Stat(dir); err == nil {
+		if !stat.IsDir() {
+			log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
+		}
+	} else {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
+		}
+	}
+	getN[n] = make(chan GetRequest)
+	delN[n] = make(chan Id)
+	mapN[n] = make(map[Id]PasteInfo)
+	get, del, m := getN[n], delN[n], mapN[n]
+	if err := filepath.Walk(dir, recoverPaste); err != nil {
+		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
+	}
 	for {
 		var done chan struct{}
 		select {
@@ -135,36 +183,6 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 			m[id] = id.GenPasteInfo(request.modTime, request.content)
 			id.EndLifeAfter(lifeTime)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
-
-		case request := <-rec:
-			now := time.Now()
-			modTime := request.fileInfo.ModTime()
-			deathTime := modTime.Add(lifeTime)
-			if deathTime.Before(now) {
-				err := os.Remove(request.filePath)
-				if err != nil {
-					log.Printf("Could not remove %s: %s", request.id, err)
-				}
-				break
-			}
-			if modTime.After(now) {
-				modTime = now
-			}
-			pasteFile, err := os.Open(request.filePath)
-			if err != nil {
-				log.Printf("Could not open paste %s: %s", request.id, err)
-				break
-			}
-			buf := make([]byte, 512)
-			_, err = pasteFile.Read(buf)
-			pasteFile.Close()
-			if err != nil && err != io.EOF {
-				log.Printf("Could not read paste %s: %s", request.id, err)
-				break
-			}
-			m[request.id] = request.id.GenPasteInfo(modTime, buf)
-			request.id.EndLifeAfter(deathTime.Sub(now))
-
 		case id := <-del:
 			if err := os.Remove(id.Path()); err == nil {
 				delete(m, id)
@@ -340,21 +358,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	<-done
 }
 
-func walkFunc(filePath string, fileInfo os.FileInfo, err error) error {
-	if err != nil {
-		return err
-	}
-	if fileInfo.IsDir() {
-		return nil
-	}
-	id, err := IdFromPath(filePath)
-	if err != nil {
-		return errors.New("Found incompatible id at path " + filePath)
-	}
-	recN[id[0]] <- RecRequest{id: id, filePath: filePath, fileInfo: fileInfo}
-	return nil
-}
-
 func main() {
 	var err error
 	flag.Parse()
@@ -380,24 +383,7 @@ func main() {
 	log.Printf("lifeTime = %s", lifeTime)
 	log.Printf("timeout  = %s", timeout)
 	for n := 0; n < 256; n++ {
-		getN[n] = make(chan GetRequest)
-		recN[n] = make(chan RecRequest)
-		delN[n] = make(chan Id)
-		b := byte(n)
-		dir := hex.EncodeToString([]byte{b})
-		if stat, err := os.Stat(dir); err == nil {
-			if !stat.IsDir() {
-				log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
-			}
-		} else {
-			if err := os.Mkdir(dir, 0700); err != nil {
-				log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
-			}
-		}
-		go worker(b, getN[n], recN[n], delN[n])
-	}
-	if err = filepath.Walk(".", walkFunc); err != nil {
-		log.Fatalf("Could not recover data directory %s: %s", dataDir, err)
+		go worker(byte(n))
 	}
 	http.HandleFunc("/", handler)
 	log.Printf("Up and running!")
