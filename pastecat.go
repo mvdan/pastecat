@@ -139,8 +139,7 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			pasteInfo := id.GenPasteInfo(request.modTime, request.content)
-			m[id] = pasteInfo
+			m[id] = id.GenPasteInfo(request.modTime, request.content)
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case request := <-rec:
@@ -162,20 +161,18 @@ func worker(n byte, get <-chan GetRequest, rec <-chan RecRequest, del <-chan Id)
 				log.Printf("Could not open paste %s: %s", request.id, err)
 				break
 			}
-			read := make([]byte, 512)
-			_, err = pasteFile.Read(read)
+			buf := make([]byte, 512)
+			_, err = pasteFile.Read(buf)
 			pasteFile.Close()
 			if err != nil && err != io.EOF {
 				log.Printf("Could not read paste %s: %s", request.id, err)
 				break
 			}
-			pasteInfo := request.id.GenPasteInfo(modTime, read)
-			m[request.id] = pasteInfo
+			m[request.id] = request.id.GenPasteInfo(modTime, buf)
 			request.id.EndLifeAfter(deathTime.Sub(now))
 
 		case id := <-del:
-			err := os.Remove(id.Path())
-			if err == nil {
+			if err := os.Remove(id.Path()); err == nil {
 				delete(m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
