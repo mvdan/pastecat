@@ -105,10 +105,10 @@ func worker() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			defer pasteFile.Close()
 			request.w.Header().Set("Etag", pasteInfo.Etag)
 			request.w.Header().Set("Content-Type", pasteInfo.ContentType)
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
+			pasteFile.Close()
 
 		case request := <-post:
 			done = request.done
@@ -132,8 +132,8 @@ func worker() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			defer pasteFile.Close()
 			written, err := pasteFile.Write(request.content)
+			pasteFile.Close()
 			if err != nil {
 				log.Printf("Could not write data into %s: %s", pastePath, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
@@ -165,9 +165,9 @@ func worker() {
 				log.Printf("Could not open paste %s: %s", request.id, err)
 				break
 			}
-			defer pasteFile.Close()
 			read := make([]byte, 512)
 			_, err = pasteFile.Read(read)
+			pasteFile.Close()
 			if err != nil && err != io.EOF {
 				log.Printf("Could not read paste %s: %s", request.id, err)
 				break
