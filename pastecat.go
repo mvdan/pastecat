@@ -49,7 +49,7 @@ var (
 	startTime     = time.Now()
 )
 
-var defMimeType = "text-plain; charset=utf-8"
+var defMimeType = "text/plain; charset=utf-8"
 var mimeTypes = map[string]string{
 	".png":  "image/png",
 	".gif":  "image/gif",
