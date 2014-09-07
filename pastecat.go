@@ -50,10 +50,13 @@ var (
 
 // Default is "text-plain; charset=utf-8"
 var mimeTypes = map[string]string{
-	".gif": "image/gif",
-	".jpg": "image/jpeg",
-	".png": "image/png",
-	".pdf": "application/pdf",
+	".png":  "image/png",
+	".gif":  "image/gif",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".svg":  "image/svg+xml",
+	".ico":  "image/x-icon",
+	".pdf":  "application/pdf",
 }
 
 var workers [256]Worker
