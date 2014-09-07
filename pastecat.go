@@ -127,7 +127,7 @@ func (w Worker) RandomId() (id Id, err error) {
 	id[0] = w.n
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[1:]); err != nil {
-			return
+			return id, err
 		}
 		if _, e := w.m[id]; !e {
 			return id, nil
@@ -326,9 +326,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var content []byte
 		ext := ""
-		if value := r.FormValue("paste"); value != "" {
+		if value := r.FormValue(fieldName); value != "" {
 			content = []byte(value)
-		} else if f, h, err := r.FormFile("paste"); err == nil {
+		} else if f, h, err := r.FormFile(fieldName); err == nil {
 			content, err = ioutil.ReadAll(f)
 			ext = strings.ToLower(filepath.Ext(h.Filename))
 			f.Close()
