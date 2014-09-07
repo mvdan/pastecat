@@ -49,6 +49,48 @@ var (
 	startTime     = time.Now()
 )
 
+func init() {
+	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
+	flag.StringVar(&listen, "l", "localhost:8080", "Host and port to listen to")
+	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
+	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
+	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
+	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
+}
+
+type ByteSize int64
+
+const (
+	B ByteSize = 1 << (10 * iota)
+	KB
+	MB
+)
+
+func parseByteSize(str string) (ByteSize, error) {
+	if !regexByteSize.MatchString(str) {
+		return 0, errors.New("Could not parse size in bytes")
+	}
+	parts := regexByteSize.FindStringSubmatch(str)
+	size, _ := strconv.ParseFloat(string(parts[1]), 64)
+	switch string(parts[2]) {
+	case "KB", "K":
+		size *= float64(KB)
+	case "MB", "M":
+		size *= float64(MB)
+	}
+	return ByteSize(size), nil
+}
+
+func (b ByteSize) String() string {
+	switch {
+	case b >= MB:
+		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
+	case b >= KB:
+		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
+	}
+	return fmt.Sprintf("%dB", b)
+}
+
 var defMimeType = "text/plain; charset=utf-8"
 var mimeTypes = map[string]string{
 	".png":  "image/png",
@@ -65,9 +107,37 @@ var post = make(chan PostRequest) // Posting is shared to balance load
 
 type Id [rawIdSize]byte
 
+func IdFromString(hexId string) (id Id, err error) {
+	if len(hexId) != idSize {
+		return id, errors.New("Invalid id at " + hexId)
+	}
+	b, err := hex.DecodeString(hexId)
+	if err != nil || len(b) != rawIdSize {
+		return id, errors.New("Invalid id at " + hexId)
+	}
+	copy(id[:], b)
+	return id, nil
+}
+
+func (id Id) String() string {
+	return hex.EncodeToString(id[:])
+}
+
 type PasteInfo struct {
 	Etag, ContentType, Path, Expires string
 	ModTime                          time.Time
+}
+
+func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
+	pasteInfo.ModTime = modTime
+	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
+	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
+	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
+		pasteInfo.ContentType = defMimeType
+	}
+	hexId := id.String()
+	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:]+ext)
+	return
 }
 
 type GetRequest struct {
@@ -217,83 +287,12 @@ func (w Worker) Work() {
 	}
 }
 
-func init() {
-	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
-	flag.StringVar(&listen, "l", "localhost:8080", "Host and port to listen to")
-	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
-	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
-	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
-	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
-}
-
-func IdFromString(hexId string) (Id, error) {
-	var id Id
-	if len(hexId) != idSize {
-		return id, errors.New("Invalid id at " + hexId)
-	}
-	b, err := hex.DecodeString(hexId)
-	if err != nil || len(b) != rawIdSize {
-		return id, errors.New("Invalid id at " + hexId)
-	}
-	copy(id[:], b)
-	return id, nil
-}
-
-func (id Id) String() string {
-	return hex.EncodeToString(id[:])
-}
-
-func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
-	pasteInfo.ModTime = modTime
-	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
-	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
-		pasteInfo.ContentType = defMimeType
-	}
-	hexId := id.String()
-	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:]+ext)
-	return
-}
-
 func (w Worker) DeletePasteAfter(id Id, duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
 		w.del <- id
 	}()
-}
-
-type ByteSize int64
-
-const (
-	B ByteSize = 1 << (10 * iota)
-	KB
-	MB
-)
-
-func parseByteSize(str string) (ByteSize, error) {
-	if !regexByteSize.MatchString(str) {
-		return 0, errors.New("Could not parse size in bytes")
-	}
-	parts := regexByteSize.FindStringSubmatch(str)
-	size, _ := strconv.ParseFloat(string(parts[1]), 64)
-	switch string(parts[2]) {
-	case "KB", "K":
-		size *= float64(KB)
-	case "MB", "M":
-		size *= float64(MB)
-	}
-	return ByteSize(size), nil
-}
-
-func (b ByteSize) String() string {
-	switch {
-	case b >= MB:
-		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
-	}
-	return fmt.Sprintf("%dB", b)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
