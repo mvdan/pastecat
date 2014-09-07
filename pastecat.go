@@ -28,6 +28,7 @@ const (
 	idSize    = 8
 	rawIdSize = idSize / 2
 	randTries = 10
+	fieldName = "paste"
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -303,11 +304,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, struct{ SiteUrl, LifeTime string }{
-				siteUrl, lifeTime.String()})
+			indexTemplate.Execute(w, struct{ SiteUrl, LifeTime, FieldName string }{
+				siteUrl, lifeTime.String(), fieldName})
 			return
 		case "/form":
-			formTemplate.Execute(w, struct{ SiteUrl string }{siteUrl})
+			formTemplate.Execute(w, struct{ SiteUrl, LifeTime, FieldName string }{
+				siteUrl, lifeTime.String(), fieldName})
 			return
 		}
 		id, err := IdFromString(r.URL.Path[1:])

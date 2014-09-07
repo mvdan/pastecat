@@ -3,7 +3,7 @@
 <pre>
 Upload a new paste:
 
-  $ echo foo | curl -F 'paste=&lt;-' {{.SiteUrl}}
+  $ echo foo | curl -F '{{.FieldName}}=&lt;-' {{.SiteUrl}}
   {{.SiteUrl}}/a63n03rp
 
 Fetch it:
@@ -18,9 +18,9 @@ Alternatively, you can use the <a href="form">web form</a> or a shell function:
   pcat() {
     if [ -t 0 ]; then
       [ $# -ne 1 ] || return 1
-      curl -F "paste=@$1" {{.SiteUrl}}
+      curl -F "{{.FieldName}}=@$1" {{.SiteUrl}}
     else
-      curl -F "paste=&lt;-" {{.SiteUrl}}
+      curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}}
     fi
   }
 
