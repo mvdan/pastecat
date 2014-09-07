@@ -66,8 +66,8 @@ var post = make(chan PostRequest) // Posting is shared to balance load
 type Id [rawIdSize]byte
 
 type PasteInfo struct {
-	Etag, ContentType, Path string
-	ModTime                 time.Time
+	Etag, ContentType, Path, Expires string
+	ModTime                          time.Time
 }
 
 type GetRequest struct {
@@ -174,6 +174,7 @@ func (w Worker) Work() {
 				break
 			}
 			request.w.Header().Set("Etag", pasteInfo.Etag)
+			request.w.Header().Set("Expires", pasteInfo.Expires)
 			request.w.Header().Set("Content-Type", pasteInfo.ContentType)
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
 			pasteFile.Close()
@@ -247,6 +248,7 @@ func (id Id) String() string {
 
 func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
+	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
 	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
 		pasteInfo.ContentType = defMimeType
