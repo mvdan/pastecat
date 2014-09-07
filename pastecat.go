@@ -112,10 +112,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	modTime := fileInfo.ModTime()
 	deathTime := modTime.Add(lifeTime)
 	if deathTime.Before(startTime) {
-		err := os.Remove(filePath)
-		if err != nil {
-			return err
-		}
+		return os.Remove(filePath)
 	}
 	if modTime.After(startTime) {
 		modTime = startTime
