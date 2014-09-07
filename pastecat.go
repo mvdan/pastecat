@@ -123,12 +123,11 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	return nil
 }
 
-func (w Worker) RandomId() (Id, error) {
-	var id Id
+func (w Worker) RandomId() (id Id, err error) {
 	id[0] = w.n
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[1:]); err != nil {
-			return id, err
+			return
 		}
 		if _, e := w.m[id]; !e {
 			return id, nil
@@ -143,10 +142,8 @@ func (w Worker) Work() {
 		if !stat.IsDir() {
 			log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
 		}
-	} else {
-		if err := os.Mkdir(dir, 0700); err != nil {
-			log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
-		}
+	} else if err := os.Mkdir(dir, 0700); err != nil {
+		log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
 	}
 	w.m = make(map[Id]PasteInfo)
 	if err := filepath.Walk(dir, w.recoverPaste); err != nil {
@@ -325,7 +322,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		case workers[id[0]].get <- GetRequest{id: id, w: w, r: r, done: done}:
 			timer.Stop()
 		}
-
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var content []byte
@@ -350,7 +346,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		case post <- PostRequest{content: content, ext: ext, modTime: time.Now(), w: w, r: r, done: done}:
 			timer.Stop()
 		}
-
 	default:
 		http.Error(w, "Unsupported action.", http.StatusBadRequest)
 		return
