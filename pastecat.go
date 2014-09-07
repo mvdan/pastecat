@@ -49,7 +49,7 @@ var (
 	startTime     = time.Now()
 )
 
-// Default is "text-plain; charset=utf-8"
+var defMimeType = "text-plain; charset=utf-8"
 var mimeTypes = map[string]string{
 	".png":  "image/png",
 	".gif":  "image/gif",
@@ -249,7 +249,7 @@ func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
 	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
-		pasteInfo.ContentType = "text-plain; charset=utf-8"
+		pasteInfo.ContentType = defMimeType
 	}
 	hexId := id.String()
 	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:]+ext)
