@@ -305,6 +305,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		case workers[id[0]].get <- GetRequest{id: id, w: w, r: r, done: done}:
 			timer.Stop()
 		}
+
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var content []byte
@@ -327,6 +328,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		case post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
 			timer.Stop()
 		}
+
 	default:
 		http.Error(w, "Unsupported action.", http.StatusBadRequest)
 		return
