@@ -23,12 +23,13 @@ import (
 )
 
 const (
-	indexTmpl = "index.html"
-	formTmpl  = "form.html"
-	idSize    = 8
-	rawIdSize = idSize / 2
-	randTries = 10
-	fieldName = "paste"
+	idSize      = 8
+	rawIdSize   = idSize / 2
+	randTries   = 10
+	fieldName   = "paste"
+	contentType = "text/plain; charset=utf-8"
+	indexTmpl   = "index.html"
+	formTmpl    = "form.html"
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -91,17 +92,6 @@ func (b ByteSize) String() string {
 	return fmt.Sprintf("%dB", b)
 }
 
-var defMimeType = "text/plain; charset=utf-8"
-var mimeTypes = map[string]string{
-	".png":  "image/png",
-	".gif":  "image/gif",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".svg":  "image/svg+xml",
-	".ico":  "image/x-icon",
-	".pdf":  "application/pdf",
-}
-
 var workers [256]Worker
 var post = make(chan PostRequest) // Posting is shared to balance load
 
@@ -124,19 +114,16 @@ func (id Id) String() string {
 }
 
 type PasteInfo struct {
-	Etag, ContentType, Path, Expires string
-	ModTime                          time.Time
+	Etag, Path, Expires string
+	ModTime             time.Time
 }
 
-func (id Id) GenPasteInfo(modTime time.Time, ext string) (pasteInfo PasteInfo) {
+func (id Id) GenPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
-	if pasteInfo.ContentType = mimeTypes[ext]; pasteInfo.ContentType == "" {
-		pasteInfo.ContentType = defMimeType
-	}
 	hexId := id.String()
-	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:]+ext)
+	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:])
 	return
 }
 
@@ -152,7 +139,6 @@ type PostRequest struct {
 	r       *http.Request
 	done    chan struct{}
 	content []byte
-	ext     string
 	modTime time.Time
 }
 
@@ -175,8 +161,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 		return errors.New("Found invalid number of directories at " + filePath)
 	}
 	hexId := dirParts[0] + dirParts[1]
-	ext := filepath.Ext(hexId)
-	id, err := IdFromString(hexId[:len(hexId)-len(ext)])
+	id, err := IdFromString(hexId)
 	if err != nil {
 		return err
 	}
@@ -188,7 +173,7 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	w.m[id] = id.GenPasteInfo(modTime, ext)
+	w.m[id] = id.GenPasteInfo(modTime)
 	w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	return nil
 }
@@ -241,7 +226,7 @@ func (w Worker) Work() {
 			}
 			request.w.Header().Set("Etag", pasteInfo.Etag)
 			request.w.Header().Set("Expires", pasteInfo.Expires)
-			request.w.Header().Set("Content-Type", pasteInfo.ContentType)
+			request.w.Header().Set("Content-Type", contentType)
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
 			pasteFile.Close()
 
@@ -253,7 +238,7 @@ func (w Worker) Work() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			pasteInfo := id.GenPasteInfo(request.modTime, request.ext)
+			pasteInfo := id.GenPasteInfo(request.modTime)
 			pasteFile, err := os.OpenFile(pasteInfo.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
@@ -323,12 +308,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		var content []byte
-		ext := ""
 		if value := r.FormValue(fieldName); value != "" {
 			content = []byte(value)
-		} else if f, h, err := r.FormFile(fieldName); err == nil {
+		} else if f, _, err := r.FormFile(fieldName); err == nil {
 			content, err = ioutil.ReadAll(f)
-			ext = strings.ToLower(filepath.Ext(h.Filename))
 			f.Close()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -341,7 +324,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case post <- PostRequest{content: content, ext: ext, modTime: time.Now(), w: w, r: r, done: done}:
+		case post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
 			timer.Stop()
 		}
 	default:
