@@ -215,9 +215,6 @@ func (w Worker) Work() {
 	} else if err := os.Mkdir(dir, 0700); err != nil {
 		log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
 	}
-	w.m = make(map[Id]PasteInfo)
-	w.get = make(chan GetRequest)
-	w.del = make(chan Id)
 	if err := filepath.Walk(dir, w.recoverPaste); err != nil {
 		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
 	}
@@ -381,6 +378,9 @@ func main() {
 	for n := range workers {
 		w := &workers[n]
 		w.n = byte(n)
+		w.m = make(map[Id]PasteInfo)
+		w.get = make(chan GetRequest)
+		w.del = make(chan Id)
 		go w.Work()
 	}
 	http.HandleFunc("/", handler)
