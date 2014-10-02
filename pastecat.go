@@ -92,9 +92,6 @@ func (b ByteSize) String() string {
 	return fmt.Sprintf("%dB", b)
 }
 
-var workers [256]Worker
-var post = make(chan PostRequest) // Posting is shared to balance load
-
 type Id [rawIdSize]byte
 
 func IdFromString(hexId string) (id Id, err error) {
@@ -148,6 +145,9 @@ type Worker struct {
 	del chan Id
 	m   map[Id]PasteInfo
 }
+
+var workers [256]Worker
+var post = make(chan PostRequest) // Posting is shared to balance load
 
 func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
