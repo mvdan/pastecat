@@ -171,7 +171,6 @@ func (s statsWorker) work() {
 			s.number--
 			s.size -= request.size
 		}
-		log.Printf("Got %d pastes weighing %s", s.number, s.size)
 	}
 }
 
