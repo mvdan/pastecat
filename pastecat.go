@@ -34,19 +34,24 @@ const (
 	// GET error messages
 	invalidId     = "Invalid paste id."
 	pasteNotFound = "Paste doesn't exist."
-	unknownError  = "Something went terribly wrong."
+
+	// POST error messages
+	reachedMax = "Reached maximum capacity of pastes. Please try again later."
 
 	// Common error messages
-	timedOut = "Request timed out."
+	unknownError = "Something went terribly wrong."
+	timedOut     = "Request timed out."
 )
 
 var (
-	siteUrl, listen, dataDir, maxSizeStr string
-	lifeTime, timeout                    time.Duration
-	maxSize                              byteSize
-	indexTemplate, formTemplate          *template.Template
+	siteUrl, listen, dataDir    string
+	lifeTime, timeout           time.Duration
+	maxNumber                   int
+	maxSizeStr, maxTotalSizeStr string
+	maxSize, maxTotalSize       byteSize
+	indexTemplate, formTemplate *template.Template
 
-	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
+	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMG]?B|[BKMG])$`)
 	startTime     = time.Now()
 )
 
@@ -57,6 +62,8 @@ func init() {
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
 	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
+	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
+	flag.StringVar(&maxTotalSizeStr, "M", "1G", "Maximum total size of pastes to store at once")
 }
 
 type byteSize int64
@@ -65,6 +72,7 @@ const (
 	_ byteSize = 1 << (10 * iota)
 	kbyte
 	mbyte
+	gbyte
 )
 
 func parseByteSize(str string) (byteSize, error) {
@@ -78,12 +86,16 @@ func parseByteSize(str string) (byteSize, error) {
 		size *= float64(kbyte)
 	case "MB", "M":
 		size *= float64(mbyte)
+	case "GB", "G":
+		size *= float64(gbyte)
 	}
 	return byteSize(size), nil
 }
 
 func (b byteSize) String() string {
 	switch {
+	case b >= gbyte:
+		return fmt.Sprintf("%.2fGB", float64(b)/float64(gbyte))
 	case b >= mbyte:
 		return fmt.Sprintf("%.2fMB", float64(b)/float64(mbyte))
 	case b >= kbyte:
@@ -124,6 +136,45 @@ func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	return
 }
 
+type incRequest struct {
+	size byteSize
+	ret  chan bool
+}
+
+type decRequest struct {
+	size byteSize
+}
+
+type statsWorker struct {
+	number int
+	size   byteSize
+	inc    chan incRequest
+	dec    chan decRequest
+}
+
+var stats statsWorker
+
+func (s statsWorker) work() {
+	for {
+		select {
+		case request := <-s.inc:
+			if maxNumber > 0 && s.number >= maxNumber {
+				request.ret <- false
+			} else if maxTotalSize > 0 && s.size+request.size > maxTotalSize {
+				request.ret <- false
+			} else {
+				s.number++
+				s.size += request.size
+				request.ret <- true
+			}
+		case request := <-s.dec:
+			s.number--
+			s.size -= request.size
+		}
+		log.Printf("Got %d pastes weighing %s", s.number, s.size)
+	}
+}
+
 type getRequest struct {
 	w    http.ResponseWriter
 	r    *http.Request
@@ -143,6 +194,7 @@ type worker struct {
 	num byte
 	get chan getRequest
 	del chan Id
+	ret chan bool
 	m   map[Id]PasteInfo
 }
 
@@ -172,6 +224,10 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	}
 	if modTime.After(startTime) {
 		modTime = startTime
+	}
+	stats.inc <- incRequest{size: byteSize(fileInfo.Size()), ret: w.ret}
+	if !<-w.ret {
+		return errors.New("Reached maximum capacity of pastes while recovering " + filePath)
 	}
 	w.m[id] = id.genPasteInfo(modTime)
 	w.DeletePasteAfter(id, deathTime.Sub(startTime))
@@ -226,10 +282,16 @@ func (w worker) work() {
 
 		case request := <-post:
 			done = request.done
+			size := byteSize(len(request.content))
 			id, err := w.RandomId()
 			if err != nil {
 				log.Println(err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				break
+			}
+			stats.inc <- incRequest{size: size, ret: w.ret}
+			if !<-w.ret {
+				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
 				break
 			}
 			pasteInfo := id.genPasteInfo(request.modTime)
@@ -237,6 +299,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				stats.dec <- decRequest{size: size}
 				break
 			}
 			_, err = pasteFile.Write(request.content)
@@ -244,6 +307,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not write data into %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
+				stats.dec <- decRequest{size: size}
 				break
 			}
 			w.m[id] = pasteInfo
@@ -252,11 +316,21 @@ func (w worker) work() {
 
 		case id := <-w.del:
 			pasteInfo, _ := w.m[id]
+			var size byteSize
+			if fileInfo, err := os.Lstat(pasteInfo.Path); err == nil {
+				size = byteSize(fileInfo.Size())
+			} else {
+				log.Printf("Could not stat paste to be removed %s: %s", id, err)
+				w.DeletePasteAfter(id, 2*time.Minute)
+				break
+			}
 			if err := os.Remove(pasteInfo.Path); err == nil {
+				stats.dec <- decRequest{size: byteSize(size)}
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
 				w.DeletePasteAfter(id, 2*time.Minute)
+				break
 			}
 		}
 		if done != nil {
@@ -336,6 +410,9 @@ func main() {
 	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
 		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
+	if maxTotalSize, err = parseByteSize(maxTotalSizeStr); err != nil {
+		log.Fatalf("Invalid max total size '%s': %s", maxTotalSizeStr, err)
+	}
 	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
 	}
@@ -348,18 +425,24 @@ func main() {
 	if err = os.Chdir(dataDir); err != nil {
 		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
 	}
-	log.Printf("maxSize  = %s", maxSize)
-	log.Printf("siteUrl  = %s", siteUrl)
-	log.Printf("listen   = %s", listen)
-	log.Printf("dataDir  = %s", dataDir)
-	log.Printf("lifeTime = %s", lifeTime)
-	log.Printf("timeout  = %s", timeout)
+	log.Printf("siteUrl      = %s", siteUrl)
+	log.Printf("listen       = %s", listen)
+	log.Printf("dataDir      = %s", dataDir)
+	log.Printf("lifeTime     = %s", lifeTime)
+	log.Printf("timeout      = %s", timeout)
+	log.Printf("maxSize      = %s", maxSize)
+	log.Printf("maxNumber    = %d", maxNumber)
+	log.Printf("maxTotalSize = %s", maxTotalSize)
+	stats.inc = make(chan incRequest)
+	stats.dec = make(chan decRequest)
+	go stats.work()
 	for n := range workers {
 		w := &workers[n]
 		w.num = byte(n)
 		w.m = make(map[Id]PasteInfo)
 		w.get = make(chan getRequest)
 		w.del = make(chan Id)
+		w.ret = make(chan bool)
 		go w.work()
 	}
 	http.HandleFunc("/", handler)
