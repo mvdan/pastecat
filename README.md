@@ -29,11 +29,11 @@ It will stay in the foreground and log paste activity and errors.
 Upload a new paste:
 
 	$ echo foo | curl -F 'paste=<-' http://paste.cat
-	http://paste.cat/a63n03rp
+	http://paste.cat/a63d03b9
 
 Fetch it:
 
-	$ curl ̣http://paste.cat/a63n03rp
+	$ curl ̣http://paste.cat/a63d03b9
 	foo
 
 The paste will be deleted after 12h0m0s.
