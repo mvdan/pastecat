@@ -11,8 +11,6 @@ Fetch it:
   $ curl ̣{{.SiteUrl}}/a63d03b9
   foo
 
-The paste will be deleted after {{.LifeTime}}.
-
 Alternatively, you can use the <a href="form">web form</a> or a shell function:
 
   pcat() {
@@ -28,6 +26,8 @@ This will allow for easier usage:
 
   $ pcat file
   $ echo foo | pcat
+
+Maximum size per paste is {{.MaxSize}}. Pastes will be deleted after {{.LifeTime}}.
 
 <a href="http://github.com/mvdan/pastecat">github.com/mvdan/pastecat</a>
 </pre>

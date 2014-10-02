@@ -353,12 +353,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, struct{ SiteUrl, LifeTime, FieldName string }{
-				siteUrl, lifeTime.String(), fieldName})
+			indexTemplate.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		case "/form":
-			formTemplate.Execute(w, struct{ SiteUrl, LifeTime, FieldName string }{
-				siteUrl, lifeTime.String(), fieldName})
+			formTemplate.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		}
 		id, err := IdFromString(r.URL.Path[1:])
