@@ -213,12 +213,6 @@ func (w Worker) Work() {
 				http.Error(request.w, pasteNotFound, http.StatusNotFound)
 				break
 			}
-			if inm := request.r.Header.Get("If-None-Match"); inm != "" {
-				if pasteInfo.Etag == inm || inm == "*" {
-					request.w.WriteHeader(http.StatusNotModified)
-					break
-				}
-			}
 			pasteFile, err := os.Open(pasteInfo.Path)
 			if err != nil {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
