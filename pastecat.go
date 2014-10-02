@@ -43,7 +43,7 @@ const (
 var (
 	siteUrl, listen, dataDir, maxSizeStr string
 	lifeTime, timeout                    time.Duration
-	maxSize                              ByteSize
+	maxSize                              byteSize
 	indexTemplate, formTemplate          *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KM]?B|[BKM])$`)
@@ -59,15 +59,15 @@ func init() {
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
 }
 
-type ByteSize int64
+type byteSize int64
 
 const (
-	B ByteSize = 1 << (10 * iota)
-	KB
-	MB
+	_ byteSize = 1 << (10 * iota)
+	kbyte
+	mbyte
 )
 
-func parseByteSize(str string) (ByteSize, error) {
+func parseByteSize(str string) (byteSize, error) {
 	if !regexByteSize.MatchString(str) {
 		return 0, errors.New("Could not parse size in bytes")
 	}
@@ -75,19 +75,19 @@ func parseByteSize(str string) (ByteSize, error) {
 	size, _ := strconv.ParseFloat(string(parts[1]), 64)
 	switch string(parts[2]) {
 	case "KB", "K":
-		size *= float64(KB)
+		size *= float64(kbyte)
 	case "MB", "M":
-		size *= float64(MB)
+		size *= float64(mbyte)
 	}
-	return ByteSize(size), nil
+	return byteSize(size), nil
 }
 
-func (b ByteSize) String() string {
+func (b byteSize) String() string {
 	switch {
-	case b >= MB:
-		return fmt.Sprintf("%.2fMB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.2fKB", float64(b)/float64(KB))
+	case b >= mbyte:
+		return fmt.Sprintf("%.2fMB", float64(b)/float64(mbyte))
+	case b >= kbyte:
+		return fmt.Sprintf("%.2fKB", float64(b)/float64(kbyte))
 	}
 	return fmt.Sprintf("%dB", b)
 }
@@ -115,7 +115,7 @@ type PasteInfo struct {
 	ModTime             time.Time
 }
 
-func (id Id) GenPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
+func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
 	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
@@ -124,14 +124,14 @@ func (id Id) GenPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	return
 }
 
-type GetRequest struct {
+type getRequest struct {
 	w    http.ResponseWriter
 	r    *http.Request
 	done chan struct{}
 	id   Id
 }
 
-type PostRequest struct {
+type postRequest struct {
 	w       http.ResponseWriter
 	r       *http.Request
 	done    chan struct{}
@@ -139,17 +139,17 @@ type PostRequest struct {
 	modTime time.Time
 }
 
-type Worker struct {
-	n   byte // Its number, aka the first two hex chars
-	get chan GetRequest
+type worker struct {
+	num byte
+	get chan getRequest
 	del chan Id
 	m   map[Id]PasteInfo
 }
 
-var workers [256]Worker
-var post = make(chan PostRequest) // Posting is shared to balance load
+var workers [256]worker
+var post = make(chan postRequest) // Posting is shared to balance load
 
-func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
+func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
@@ -173,13 +173,13 @@ func (w Worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	w.m[id] = id.GenPasteInfo(modTime)
+	w.m[id] = id.genPasteInfo(modTime)
 	w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	return nil
 }
 
-func (w Worker) RandomId() (id Id, err error) {
-	id[0] = w.n
+func (w worker) RandomId() (id Id, err error) {
+	id[0] = w.num
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[1:]); err != nil {
 			return id, err
@@ -191,8 +191,8 @@ func (w Worker) RandomId() (id Id, err error) {
 	return id, fmt.Errorf("Gave up trying to find an unused random id after %d tries", randTries)
 }
 
-func (w Worker) Work() {
-	dir := hex.EncodeToString([]byte{w.n})
+func (w worker) work() {
+	dir := hex.EncodeToString([]byte{w.num})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
 			log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
@@ -232,7 +232,7 @@ func (w Worker) Work() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			pasteInfo := id.GenPasteInfo(request.modTime)
+			pasteInfo := id.genPasteInfo(request.modTime)
 			pasteFile, err := os.OpenFile(pasteInfo.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
@@ -265,7 +265,7 @@ func (w Worker) Work() {
 	}
 }
 
-func (w Worker) DeletePasteAfter(id Id, duration time.Duration) {
+func (w worker) DeletePasteAfter(id Id, duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
@@ -296,7 +296,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case workers[id[0]].get <- GetRequest{id: id, w: w, r: r, done: done}:
+		case workers[id[0]].get <- getRequest{id: id, w: w, r: r, done: done}:
 			timer.Stop()
 		}
 
@@ -319,7 +319,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case post <- PostRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
+		case post <- postRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
 			timer.Stop()
 		}
 
@@ -356,11 +356,11 @@ func main() {
 	log.Printf("timeout  = %s", timeout)
 	for n := range workers {
 		w := &workers[n]
-		w.n = byte(n)
+		w.num = byte(n)
 		w.m = make(map[Id]PasteInfo)
-		w.get = make(chan GetRequest)
+		w.get = make(chan getRequest)
 		w.del = make(chan Id)
-		go w.Work()
+		go w.work()
 	}
 	http.HandleFunc("/", handler)
 	log.Printf("Up and running!")
