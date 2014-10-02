@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -150,6 +151,7 @@ type statsWorker struct {
 	size   byteSize
 	inc    chan incRequest
 	dec    chan decRequest
+	report chan struct{}
 }
 
 var stats statsWorker
@@ -170,7 +172,19 @@ func (s statsWorker) work() {
 		case request := <-s.dec:
 			s.number--
 			s.size -= request.size
+		case <-s.report:
+			log.Printf("Have a total of %d pastes using %s", s.number, s.size)
 		}
+	}
+}
+
+func (s statsWorker) reporter() {
+	recovering.Wait()
+	log.Println("Finished recovering all pastes from the data directory.")
+	s.report <- struct{}{}
+	ticker := time.NewTicker(time.Minute)
+	for _ = range ticker.C {
+		s.report <- struct{}{}
 	}
 }
 
@@ -199,6 +213,7 @@ type worker struct {
 
 var workers [256]worker
 var post = make(chan postRequest) // Posting is shared to balance load
+var recovering sync.WaitGroup
 
 func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
@@ -258,6 +273,7 @@ func (w worker) work() {
 	if err := filepath.Walk(dir, w.recoverPaste); err != nil {
 		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
 	}
+	recovering.Done()
 	for {
 		var done chan struct{}
 		select {
@@ -434,6 +450,7 @@ func main() {
 	log.Printf("maxTotalSize = %s", maxTotalSize)
 	stats.inc = make(chan incRequest)
 	stats.dec = make(chan decRequest)
+	stats.report = make(chan struct{})
 	go stats.work()
 	for n := range workers {
 		w := &workers[n]
@@ -442,8 +459,10 @@ func main() {
 		w.get = make(chan getRequest)
 		w.del = make(chan Id)
 		w.ret = make(chan bool)
+		recovering.Add(1)
 		go w.work()
 	}
+	go stats.reporter()
 	http.HandleFunc("/", handler)
 	log.Printf("Up and running!")
 	log.Fatal(http.ListenAndServe(listen, nil))
