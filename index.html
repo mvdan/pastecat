@@ -15,7 +15,7 @@ Alternatively, you can use the <a href="form">web form</a> or a shell function:
 
   pcat() {
     if [ -t 0 ]; then
-      [ $# -ne 1 ] || return 1
+      [ $# -eq 1 ] || return 1
       curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}} &lt; "$1"
     else
       curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}}

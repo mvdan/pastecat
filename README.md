@@ -42,7 +42,7 @@ Alternatively, you can use the web form or a shell function:
 
 	pcat() {
 	  if [ -t 0 ]; then
-	    [ $# -ne 1 ] || return 1
+	    [ $# -eq 1 ] || return 1
 	    curl -F "paste=<-" http://paste.cat < "$1"
 	  else
 	    curl -F "paste=<-" http://paste.cat
