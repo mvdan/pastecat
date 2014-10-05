@@ -252,7 +252,7 @@ func (w worker) RandomId() (id Id, err error) {
 	id[0] = w.num
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[1:]); err != nil {
-			return id, err
+			continue
 		}
 		if _, e := w.m[id]; !e {
 			return id, nil
