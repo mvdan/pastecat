@@ -173,7 +173,17 @@ func (s statsWorker) work() {
 			s.number--
 			s.size -= request.size
 		case <-s.report:
-			log.Printf("Have a total of %d pastes using %s", s.number, s.size)
+			numberStat := fmt.Sprintf("%d", s.number)
+			if maxNumber > 0 {
+				numberStat += fmt.Sprintf(" (%.2f%% out of %d)",
+					float64(s.number*100)/float64(maxNumber), maxNumber)
+			}
+			sizeStat := fmt.Sprintf("%s", s.size)
+			if maxTotalSize > 0 {
+				sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
+					float64(s.size*100)/float64(maxTotalSize), maxTotalSize)
+			}
+			log.Printf("Have a total of %s pastes using %s", numberStat, sizeStat)
 		}
 	}
 }
