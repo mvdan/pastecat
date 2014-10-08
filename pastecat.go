@@ -146,7 +146,6 @@ func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 
 type incRequest struct {
 	size byteSize
-	ret  chan bool
 }
 
 type decRequest struct {
@@ -158,6 +157,7 @@ type statsWorker struct {
 	size   byteSize
 	inc    chan incRequest
 	dec    chan decRequest
+	ret    chan bool
 	report chan struct{}
 }
 
@@ -168,13 +168,13 @@ func (s statsWorker) work() {
 		select {
 		case request := <-s.inc:
 			if maxNumber > 0 && s.number >= maxNumber {
-				request.ret <- false
+				s.ret <- false
 			} else if maxTotalSize > 0 && s.size+request.size > maxTotalSize {
-				request.ret <- false
+				s.ret <- false
 			} else {
 				s.number++
 				s.size += request.size
-				request.ret <- true
+				s.ret <- true
 			}
 		case request := <-s.dec:
 			s.number--
@@ -208,7 +208,6 @@ func (s statsWorker) reporter() {
 type getRequest struct {
 	w    http.ResponseWriter
 	r    *http.Request
-	done chan struct{}
 	id   Id
 }
 
@@ -224,7 +223,7 @@ type worker struct {
 	num byte
 	get chan getRequest
 	del chan Id
-	ret chan bool
+	done chan struct{}
 	m   map[Id]PasteInfo
 }
 
@@ -256,8 +255,8 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	stats.inc <- incRequest{size: byteSize(fileInfo.Size()), ret: w.ret}
-	if !<-w.ret {
+	stats.inc <- incRequest{size: byteSize(fileInfo.Size())}
+	if !<-stats.ret {
 		return errors.New("Reached maximum capacity of pastes while recovering " + filePath)
 	}
 	w.m[id] = id.genPasteInfo(modTime)
@@ -295,7 +294,7 @@ func (w worker) work() {
 		var done chan struct{}
 		select {
 		case request := <-w.get:
-			done = request.done
+			done = w.done
 			pasteInfo, e := w.m[request.id]
 			if !e {
 				http.Error(request.w, pasteNotFound, http.StatusNotFound)
@@ -317,8 +316,8 @@ func (w worker) work() {
 		case request := <-post:
 			done = request.done
 			pasteSize := byteSize(len(request.content))
-			stats.inc <- incRequest{size: pasteSize, ret: w.ret}
-			if !<-w.ret {
+			stats.inc <- incRequest{size: pasteSize}
+			if !<-stats.ret {
 				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
 				break
 			}
@@ -401,15 +400,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
-		done := make(chan struct{})
 		timer := time.NewTimer(timeout)
+		worker := workers[id[0]]
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case workers[id[0]].get <- getRequest{id: id, w: w, r: r, done: done}:
+		case worker.get <- getRequest{id: id, w: w, r: r}:
 			timer.Stop()
 		}
-		<-done
+		<-worker.done
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -474,6 +473,7 @@ func main() {
 	log.Printf("maxTotalSize = %s", maxTotalSize)
 	stats.inc = make(chan incRequest)
 	stats.dec = make(chan decRequest)
+	stats.ret = make(chan bool)
 	stats.report = make(chan struct{})
 	go stats.work()
 	for n := range workers {
@@ -482,7 +482,7 @@ func main() {
 		w.m = make(map[Id]PasteInfo)
 		w.get = make(chan getRequest)
 		w.del = make(chan Id)
-		w.ret = make(chan bool)
+		w.done = make(chan struct{})
 		recovering.Add(1)
 		go w.work()
 	}
