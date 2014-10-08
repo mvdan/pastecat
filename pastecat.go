@@ -130,7 +130,9 @@ type PasteInfo struct {
 
 func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	pasteInfo.ModTime = modTime
-	pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
+	if lifeTime > 0 {
+		pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
+	}
 	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
 	hexId := id.String()
 	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:])
@@ -300,7 +302,9 @@ func (w worker) work() {
 				break
 			}
 			request.w.Header().Set("Etag", pasteInfo.Etag)
-			request.w.Header().Set("Expires", pasteInfo.Expires)
+			if lifeTime > 0 {
+				request.w.Header().Set("Expires", pasteInfo.Expires)
+			}
 			request.w.Header().Set("Content-Type", contentType)
 			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
 			pasteFile.Close()
@@ -336,7 +340,9 @@ func (w worker) work() {
 				break
 			}
 			w.m[id] = pasteInfo
-			w.DeletePasteAfter(id, lifeTime)
+			if lifeTime > 0 {
+				w.DeletePasteAfter(id, lifeTime)
+			}
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case id := <-w.del:
