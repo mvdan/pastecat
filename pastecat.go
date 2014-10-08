@@ -311,8 +311,8 @@ func (w worker) work() {
 
 		case request := <-post:
 			done = request.done
-			size := byteSize(len(request.content))
-			stats.inc <- incRequest{size: size, ret: w.ret}
+			pasteSize := byteSize(len(request.content))
+			stats.inc <- incRequest{size: pasteSize, ret: w.ret}
 			if !<-w.ret {
 				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
 				break
@@ -328,7 +328,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				stats.dec <- decRequest{size: size}
+				stats.dec <- decRequest{size: pasteSize}
 				break
 			}
 			_, err = pasteFile.Write(request.content)
@@ -336,7 +336,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not write data into %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				stats.dec <- decRequest{size: size}
+				stats.dec <- decRequest{size: pasteSize}
 				break
 			}
 			w.m[id] = pasteInfo
@@ -347,16 +347,16 @@ func (w worker) work() {
 
 		case id := <-w.del:
 			pasteInfo, _ := w.m[id]
-			var size byteSize
+			var pasteSize byteSize
 			if fileInfo, err := os.Lstat(pasteInfo.Path); err == nil {
-				size = byteSize(fileInfo.Size())
+				pasteSize = byteSize(fileInfo.Size())
 			} else {
 				log.Printf("Could not stat paste to be removed %s: %s", id, err)
 				w.DeletePasteAfter(id, 2*time.Minute)
 				break
 			}
 			if err := os.Remove(pasteInfo.Path); err == nil {
-				stats.dec <- decRequest{size: byteSize(size)}
+				stats.dec <- decRequest{size: pasteSize}
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
