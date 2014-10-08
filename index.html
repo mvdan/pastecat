@@ -1,31 +1,19 @@
 <html>
 <body>
 <pre>
+Set up an alias for easy usage:
+
+  $ alias pcat='curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}}'
+
 Upload a new paste:
 
-  $ echo foo | curl -F '{{.FieldName}}=&lt;-' {{.SiteUrl}}
+  $ echo foo | pcat
   {{.SiteUrl}}/a63d03b9
 
 Fetch it:
 
   $ curl ̣{{.SiteUrl}}/a63d03b9
   foo
-
-Alternatively, you can use the <a href="form">web form</a> or a shell function:
-
-  pcat() {
-    if [ -t 0 ]; then
-      [ $# -eq 1 ] || return 1
-      curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}} &lt; "$1"
-    else
-      curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}}
-    fi
-  }
-
-This will allow for easier usage:
-
-  $ pcat file
-  $ echo foo | pcat
 
 Maximum size per paste is {{.MaxSize}}. Pastes will be deleted after {{.LifeTime}}.
 

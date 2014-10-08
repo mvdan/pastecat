@@ -26,30 +26,16 @@ It will stay in the foreground and log paste activity and errors.
 
 #### Use
 
-Upload a new paste:
+Set up an alias for easy usage:
 
-	$ echo foo | curl -F 'paste=<-' http://paste.cat
+	$ alias pcat='curl -F "paste=<-" http://paste.cat'
+
+Upload a new paste via standard input:
+
+	$ echo foo | pcat
 	http://paste.cat/a63d03b9
 
 Fetch it:
 
 	$ curl ̣http://paste.cat/a63d03b9
 	foo
-
-The paste will be deleted after 12h0m0s.
-
-Alternatively, you can use the web form or a shell function:
-
-	pcat() {
-	  if [ -t 0 ]; then
-	    [ $# -eq 1 ] || return 1
-	    curl -F "paste=<-" http://paste.cat < "$1"
-	  else
-	    curl -F "paste=<-" http://paste.cat
-	  fi
-	}
-
-This will allow for easier usage:
-
-	$ pcat file
-	$ echo foo | pcat
