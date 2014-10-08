@@ -312,15 +312,15 @@ func (w worker) work() {
 		case request := <-post:
 			done = request.done
 			size := byteSize(len(request.content))
+			stats.inc <- incRequest{size: size, ret: w.ret}
+			if !<-w.ret {
+				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
+				break
+			}
 			id, err := w.RandomId()
 			if err != nil {
 				log.Println(err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				break
-			}
-			stats.inc <- incRequest{size: size, ret: w.ret}
-			if !<-w.ret {
-				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
 				break
 			}
 			pasteInfo := id.genPasteInfo(request.modTime)
