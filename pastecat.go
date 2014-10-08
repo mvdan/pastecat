@@ -384,8 +384,6 @@ func (w worker) DeletePasteAfter(id Id, duration time.Duration) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	done := make(chan struct{})
-	timer := time.NewTimer(timeout)
 	switch r.Method {
 	case "GET":
 		switch r.URL.Path {
@@ -403,12 +401,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
+		done := make(chan struct{})
+		timer := time.NewTimer(timeout)
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
 		case workers[id[0]].get <- getRequest{id: id, w: w, r: r, done: done}:
 			timer.Stop()
 		}
+		<-done
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
@@ -426,18 +427,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		done := make(chan struct{})
+		timer := time.NewTimer(timeout)
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
 		case post <- postRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
 			timer.Stop()
 		}
+		<-done
 
 	default:
 		http.Error(w, "Unsupported action.", http.StatusBadRequest)
 		return
 	}
-	<-done
 }
 
 func main() {
