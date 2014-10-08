@@ -144,19 +144,11 @@ func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
 	return
 }
 
-type incRequest struct {
-	size byteSize
-}
-
-type decRequest struct {
-	size byteSize
-}
-
 type statsWorker struct {
 	number int
 	size   byteSize
-	inc    chan incRequest
-	dec    chan decRequest
+	inc    chan byteSize
+	dec    chan byteSize
 	ret    chan bool
 	report chan struct{}
 }
@@ -166,19 +158,19 @@ var stats statsWorker
 func (s statsWorker) work() {
 	for {
 		select {
-		case request := <-s.inc:
+		case size := <-s.inc:
 			if maxNumber > 0 && s.number >= maxNumber {
 				s.ret <- false
-			} else if maxTotalSize > 0 && s.size+request.size > maxTotalSize {
+			} else if maxTotalSize > 0 && s.size+size > maxTotalSize {
 				s.ret <- false
 			} else {
 				s.number++
-				s.size += request.size
+				s.size += size
 				s.ret <- true
 			}
-		case request := <-s.dec:
+		case size := <-s.dec:
 			s.number--
-			s.size -= request.size
+			s.size -= size
 		case <-s.report:
 			numberStat := fmt.Sprintf("%d", s.number)
 			if maxNumber > 0 {
@@ -255,7 +247,7 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 	if modTime.After(startTime) {
 		modTime = startTime
 	}
-	stats.inc <- incRequest{size: byteSize(fileInfo.Size())}
+	stats.inc <- byteSize(fileInfo.Size())
 	if !<-stats.ret {
 		return errors.New("Reached maximum capacity of pastes while recovering " + filePath)
 	}
@@ -316,7 +308,7 @@ func (w worker) work() {
 		case request := <-post:
 			done = request.done
 			pasteSize := byteSize(len(request.content))
-			stats.inc <- incRequest{size: pasteSize}
+			stats.inc <- pasteSize
 			if !<-stats.ret {
 				http.Error(request.w, reachedMax, http.StatusServiceUnavailable)
 				break
@@ -332,7 +324,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				stats.dec <- decRequest{size: pasteSize}
+				stats.dec <- pasteSize
 				break
 			}
 			_, err = pasteFile.Write(request.content)
@@ -340,7 +332,7 @@ func (w worker) work() {
 			if err != nil {
 				log.Printf("Could not write data into %s: %s", pasteInfo.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
-				stats.dec <- decRequest{size: pasteSize}
+				stats.dec <- pasteSize
 				break
 			}
 			w.m[id] = pasteInfo
@@ -360,7 +352,7 @@ func (w worker) work() {
 				break
 			}
 			if err := os.Remove(pasteInfo.Path); err == nil {
-				stats.dec <- decRequest{size: pasteSize}
+				stats.dec <- pasteSize
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
@@ -471,8 +463,8 @@ func main() {
 	log.Printf("maxSize      = %s", maxSize)
 	log.Printf("maxNumber    = %d", maxNumber)
 	log.Printf("maxTotalSize = %s", maxTotalSize)
-	stats.inc = make(chan incRequest)
-	stats.dec = make(chan decRequest)
+	stats.inc = make(chan byteSize)
+	stats.dec = make(chan byteSize)
 	stats.ret = make(chan bool)
 	stats.report = make(chan struct{})
 	go stats.work()
