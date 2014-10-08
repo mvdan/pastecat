@@ -58,7 +58,7 @@ var (
 
 func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
-	flag.StringVar(&listen, "l", "localhost:8080", "Host and port to listen to")
+	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
 	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
