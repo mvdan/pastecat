@@ -205,7 +205,6 @@ type getRequest struct {
 
 type postRequest struct {
 	w       http.ResponseWriter
-	r       *http.Request
 	done    chan struct{}
 	content []byte
 	modTime time.Time
@@ -423,7 +422,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)
-		case post <- postRequest{content: content, modTime: time.Now(), w: w, r: r, done: done}:
+		case post <- postRequest{content: content, modTime: time.Now(), w: w, done: done}:
 			timer.Stop()
 		}
 		<-done
