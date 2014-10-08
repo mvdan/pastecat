@@ -52,7 +52,7 @@ var (
 	maxSize, maxTotalSize       byteSize
 	indexTemplate, formTemplate *template.Template
 
-	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMG]?B|[BKMG])$`)
+	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B|[BKMGT])$`)
 	startTime     = time.Now()
 )
 
@@ -74,6 +74,7 @@ const (
 	kbyte
 	mbyte
 	gbyte
+	tbyte
 )
 
 func parseByteSize(str string) (byteSize, error) {
@@ -89,12 +90,16 @@ func parseByteSize(str string) (byteSize, error) {
 		size *= float64(mbyte)
 	case "GB", "G":
 		size *= float64(gbyte)
+	case "TB", "T":
+		size *= float64(tbyte)
 	}
 	return byteSize(size), nil
 }
 
 func (b byteSize) String() string {
 	switch {
+	case b >= tbyte:
+		return fmt.Sprintf("%.2fGB", float64(b)/float64(tbyte))
 	case b >= gbyte:
 		return fmt.Sprintf("%.2fGB", float64(b)/float64(gbyte))
 	case b >= mbyte:
