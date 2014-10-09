@@ -61,10 +61,10 @@ func init() {
 	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
 	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
-	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
-	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of POSTs in bytes")
+	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of pastes")
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
-	flag.StringVar(&maxTotalSizeStr, "M", "1G", "Maximum total size of pastes to store at once")
+	flag.StringVar(&maxTotalSizeStr, "M", "1G", "Maximum storage size to use at once")
+	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
 }
 
 type byteSize int64
@@ -391,7 +391,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
 		}
-		timer := time.NewTimer(timeout)
+		var timer *time.Timer
+		if timeout > 0 {
+			timer = time.NewTimer(timeout)
+		}
 		worker := workers[id[0]]
 		select {
 		case <-timer.C:
@@ -418,7 +421,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		done := make(chan struct{})
-		timer := time.NewTimer(timeout)
+		var timer *time.Timer
+		if timeout > 0 {
+			timer = time.NewTimer(timeout)
+		}
 		select {
 		case <-timer.C:
 			http.Error(w, timedOut, http.StatusRequestTimeout)

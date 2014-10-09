@@ -1,7 +1,7 @@
 ## Pastecat
 
 A very simple and self-hosted pastebin service written in Go. Stores
-zlib-compressed pastes in a filesystem hierarchy.
+plaintext pastes in a filesystem hierarchy.
 
 Designed to remove pastes after a certain period of time. Upon restart, file
 modification times will be used to recover the removal time of each paste.
@@ -14,15 +14,22 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 #### Run
 
-Default options:
+Quick setup:
 
-	$ ./pastecat
+	$ pastecat -u http://my.site -l :80 -d /tmp/paste
 
-Custom options:
+Options:
 
-	$ ./pastecat -u http://my.site -l hostname:80 -d /tmp/paste -t 1h -s 2M -i 6
+* **-u** - URL of the site - *http://localhost:8080*
+* **-l** - Host and port to listen to - *:8080*
+* **-d** - Directory to store all the pastes in - *data*
+* **-t** - Lifetime of the pastes - *12h*
+* **-s** - Maximum size of pastes - *1M*
+* **-m** - Maximum number of pastes to store at once - *0*
+* **-M** - Maximum storage size to use at once - *1G*
+* **-T** - Timeout of requests - *200ms*
 
-It will stay in the foreground and log paste activity and errors.
+It will stay in the foreground and periodically print usage stats.
 
 #### Use
 
