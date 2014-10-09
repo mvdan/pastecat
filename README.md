@@ -46,3 +46,20 @@ Fetch it:
 
 	$ curl ̣http://paste.cat/a63d03b9
 	foo
+
+#### What it doesn't do
+
+##### Compression
+
+Should be handled at a lower level. Filesystems like Btrfs already support
+compression.
+
+##### HTTPS
+
+All pastes are public even if urls are not easily found. You can use tools
+like GnuPG if you wish to sign or encrypt your data and then upload it in a
+format like ASCII armored.
+
+The only real reason why HTTPS might be needed is to fetch sensitive data that
+someone else uploaded without signing nor encrypting it. In which case the
+solution would be to not upload it in bare plain text to begin with.
