@@ -29,8 +29,6 @@ const (
 	randTries   = 10
 	fieldName   = "paste"
 	contentType = "text/plain; charset=utf-8"
-	indexTmpl   = "index.html"
-	formTmpl    = "form.html"
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -50,7 +48,7 @@ var (
 	maxNumber                 int
 	maxSizeStr, maxStorageStr string
 	maxSize, maxStorage       byteSize
-	indexTempl, formTempl     *template.Template
+	templates                 *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B|[BKMGT])$`)
 	startTime     = time.Now()
@@ -378,12 +376,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTempl.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
-				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
+			templates.ExecuteTemplate(w, "index.html",
+				struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+					siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		case "/form":
-			formTempl.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
-				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
+			templates.ExecuteTemplate(w, "form.html",
+				struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+					siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		}
 		id, err := IdFromString(r.URL.Path[1:])
@@ -448,12 +448,7 @@ func main() {
 	if maxStorage, err = parseByteSize(maxStorageStr); err != nil {
 		log.Fatalf("Invalid max storage '%s': %s", maxStorageStr, err)
 	}
-	if indexTempl, err = template.ParseFiles(indexTmpl); err != nil {
-		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
-	}
-	if formTempl, err = template.ParseFiles(formTmpl); err != nil {
-		log.Fatalf("Could not load template %s: %s", formTmpl, err)
-	}
+	templates = template.Must(template.ParseFiles("index.html", "form.html"))
 	if err = os.MkdirAll(dataDir, 0700); err != nil {
 		log.Fatalf("Could not create data directory %s: %s", dataDir, err)
 	}
