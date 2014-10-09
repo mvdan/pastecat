@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	idSize      = 8
+	idSize      = 8 // At least 4
 	rawIdSize   = idSize / 2
 	randTries   = 10
 	fieldName   = "paste"
@@ -45,12 +45,12 @@ const (
 )
 
 var (
-	siteUrl, listen, dataDir    string
-	lifeTime, timeout           time.Duration
-	maxNumber                   int
-	maxSizeStr, maxTotalSizeStr string
-	maxSize, maxTotalSize       byteSize
-	indexTemplate, formTemplate *template.Template
+	siteUrl, listen, dataDir  string
+	lifeTime, timeout         time.Duration
+	maxNumber                 int
+	maxSizeStr, maxStorageStr string
+	maxSize, maxStorage       byteSize
+	indexTempl, formTempl     *template.Template
 
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B|[BKMGT])$`)
 	startTime     = time.Now()
@@ -63,7 +63,7 @@ func init() {
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of pastes")
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
-	flag.StringVar(&maxTotalSizeStr, "M", "1G", "Maximum storage size to use at once")
+	flag.StringVar(&maxStorageStr, "M", "1G", "Maximum storage size to use at once")
 	flag.DurationVar(&timeout, "T", 200*time.Millisecond, "Timeout of requests")
 }
 
@@ -161,7 +161,7 @@ func (s statsWorker) work() {
 		case size := <-s.inc:
 			if maxNumber > 0 && s.number >= maxNumber {
 				s.ret <- false
-			} else if maxTotalSize > 0 && s.size+size > maxTotalSize {
+			} else if maxStorage > 0 && s.size+size > maxStorage {
 				s.ret <- false
 			} else {
 				s.number++
@@ -178,9 +178,9 @@ func (s statsWorker) work() {
 					float64(s.number*100)/float64(maxNumber), maxNumber)
 			}
 			sizeStat := fmt.Sprintf("%s", s.size)
-			if maxTotalSize > 0 {
+			if maxStorage > 0 {
 				sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
-					float64(s.size*100)/float64(maxTotalSize), maxTotalSize)
+					float64(s.size*100)/float64(maxStorage), maxStorage)
 			}
 			log.Printf("Have a total of %s pastes using %s", numberStat, sizeStat)
 		}
@@ -198,9 +198,9 @@ func (s statsWorker) reporter() {
 }
 
 type getRequest struct {
-	w    http.ResponseWriter
-	r    *http.Request
-	id   Id
+	w  http.ResponseWriter
+	r  *http.Request
+	id Id
 }
 
 type postRequest struct {
@@ -211,11 +211,11 @@ type postRequest struct {
 }
 
 type worker struct {
-	num byte
-	get chan getRequest
-	del chan Id
+	num  byte
+	get  chan getRequest
+	del  chan Id
 	done chan struct{}
-	m   map[Id]PasteInfo
+	m    map[Id]PasteInfo
 }
 
 var workers [256]worker
@@ -378,11 +378,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
-			indexTemplate.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+			indexTempl.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
 				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		case "/form":
-			formTemplate.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
+			formTempl.Execute(w, struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
 				siteUrl, maxSize.String(), lifeTime.String(), fieldName})
 			return
 		}
@@ -445,13 +445,13 @@ func main() {
 	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
 		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
 	}
-	if maxTotalSize, err = parseByteSize(maxTotalSizeStr); err != nil {
-		log.Fatalf("Invalid max total size '%s': %s", maxTotalSizeStr, err)
+	if maxStorage, err = parseByteSize(maxStorageStr); err != nil {
+		log.Fatalf("Invalid max storage '%s': %s", maxStorageStr, err)
 	}
-	if indexTemplate, err = template.ParseFiles(indexTmpl); err != nil {
+	if indexTempl, err = template.ParseFiles(indexTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", indexTmpl, err)
 	}
-	if formTemplate, err = template.ParseFiles(formTmpl); err != nil {
+	if formTempl, err = template.ParseFiles(formTmpl); err != nil {
 		log.Fatalf("Could not load template %s: %s", formTmpl, err)
 	}
 	if err = os.MkdirAll(dataDir, 0700); err != nil {
@@ -460,14 +460,14 @@ func main() {
 	if err = os.Chdir(dataDir); err != nil {
 		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
 	}
-	log.Printf("siteUrl      = %s", siteUrl)
-	log.Printf("listen       = %s", listen)
-	log.Printf("dataDir      = %s", dataDir)
-	log.Printf("lifeTime     = %s", lifeTime)
-	log.Printf("timeout      = %s", timeout)
-	log.Printf("maxSize      = %s", maxSize)
-	log.Printf("maxNumber    = %d", maxNumber)
-	log.Printf("maxTotalSize = %s", maxTotalSize)
+	log.Printf("siteUrl    = %s", siteUrl)
+	log.Printf("listen     = %s", listen)
+	log.Printf("dataDir    = %s", dataDir)
+	log.Printf("lifeTime   = %s", lifeTime)
+	log.Printf("timeout    = %s", timeout)
+	log.Printf("maxSize    = %s", maxSize)
+	log.Printf("maxNumber  = %d", maxNumber)
+	log.Printf("maxStorage = %s", maxStorage)
 	stats.inc = make(chan byteSize)
 	stats.dec = make(chan byteSize)
 	stats.ret = make(chan bool)
@@ -485,6 +485,6 @@ func main() {
 	}
 	go stats.reporter()
 	http.HandleFunc("/", handler)
-	log.Printf("Up and running!")
+	log.Println("Up and running!")
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
