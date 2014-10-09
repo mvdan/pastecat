@@ -371,19 +371,33 @@ func (w worker) DeletePasteAfter(id Id, duration time.Duration) {
 	}()
 }
 
+func describeLimits() string {
+	var limits []string
+	if maxSize > 0 {
+		limits = append(limits, fmt.Sprintf("Maximum size per paste is %s.", maxSize))
+	}
+	if lifeTime > 0 {
+		limits = append(limits, fmt.Sprintf("Pastes will be deleted after %s.", lifeTime))
+	}
+	if len(limits) > 0 {
+		return strings.Join(limits, " ") + "\n\n";
+	}
+	return ""
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		switch r.URL.Path {
 		case "/":
 			templates.ExecuteTemplate(w, "index.html",
-				struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
-					siteUrl, maxSize.String(), lifeTime.String(), fieldName})
+				struct{ SiteUrl, LimitDesc, FieldName string }{
+					siteUrl, describeLimits(), fieldName})
 			return
 		case "/form":
 			templates.ExecuteTemplate(w, "form.html",
-				struct{ SiteUrl, MaxSize, LifeTime, FieldName string }{
-					siteUrl, maxSize.String(), lifeTime.String(), fieldName})
+				struct{ SiteUrl, LimitDesc, FieldName string }{
+					siteUrl, describeLimits(), fieldName})
 			return
 		}
 		id, err := IdFromString(r.URL.Path[1:])

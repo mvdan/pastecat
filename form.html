@@ -1,6 +1,5 @@
 <html>
 <body>
-	<p>Maximum size per paste is {{.MaxSize}}. Pastes will be deleted after {{.LifeTime}}.</p>
 	<form action="{{.SiteUrl}}" method="post" enctype="multipart/form-data">
 		<textarea cols=80 rows=24 name="{{.FieldName}}"></textarea>
 		<br/>
@@ -12,5 +11,6 @@
 		<br/>
 		<button type="submit">Paste file</button>
 	</form>
+	<p>{{.LimitDesc}}</p>
 </body>
 </html>
