@@ -56,10 +56,9 @@ compression.
 
 ##### HTTPS
 
-All pastes are public even if urls are not easily found. You can use tools
-like GnuPG if you wish to sign or encrypt your data and then upload it in a
-format like ASCII armored.
+Even though security could be accomplished over plain HTTP by using tools like
+GnuPG on the client side, for privacy reasons you might want to support HTTPS
+as well.
 
-The only real reason why HTTPS might be needed is to fetch sensitive data that
-someone else uploaded without signing nor encrypting it. In which case the
-solution would be to not upload it in bare plain text to begin with.
+In such cases, running pastecat behind a reverse proxy like Nginx is the best
+option. HTTP servers should have lots of features including TLS support.
