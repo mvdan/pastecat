@@ -50,7 +50,7 @@ var (
 	maxSize, maxStorage       byteSize
 	templates                 *template.Template
 
-	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B|[BKMGT])$`)
+	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B?)$`)
 	startTime     = time.Now()
 )
 
