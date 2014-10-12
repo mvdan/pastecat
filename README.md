@@ -54,6 +54,11 @@ Fetch it:
 Should be handled at a lower level. Filesystems like Btrfs already support
 compression.
 
+##### Content-Types (mimetypes)
+
+A pastebin service is, by definition, aimed at plaintext only. All content is
+served in "text/plain; charset=utf-8".
+
 ##### HTTPS
 
 Even though security could be accomplished over plain HTTP by using tools like
