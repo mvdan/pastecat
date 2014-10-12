@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -166,9 +167,11 @@ func (s statsWorker) work() {
 				s.size += size
 				s.ret <- true
 			}
+
 		case size := <-s.dec:
 			s.number--
 			s.size -= size
+
 		case <-s.report:
 			numberStat := fmt.Sprintf("%d", s.number)
 			if maxNumber > 0 {
@@ -214,11 +217,13 @@ type worker struct {
 	del  chan Id
 	done chan struct{}
 	m    map[Id]PasteInfo
+	quit chan struct{}
 }
 
 var workers [256]worker
 var post = make(chan postRequest) // Posting is shared to balance load
 var recovering sync.WaitGroup
+var running sync.WaitGroup
 
 func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
@@ -279,6 +284,7 @@ func (w worker) work() {
 		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
 	}
 	recovering.Done()
+	defer running.Done()
 	for {
 		var done chan struct{}
 		select {
@@ -356,6 +362,9 @@ func (w worker) work() {
 				w.DeletePasteAfter(id, 2*time.Minute)
 				break
 			}
+
+		case <-w.quit:
+			return
 		}
 		if done != nil {
 			done <- struct{}{}
@@ -469,6 +478,7 @@ func main() {
 	if err = os.Chdir(dataDir); err != nil {
 		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
 	}
+
 	log.Printf("siteUrl    = %s", siteUrl)
 	log.Printf("listen     = %s", listen)
 	log.Printf("dataDir    = %s", dataDir)
@@ -477,11 +487,16 @@ func main() {
 	log.Printf("maxSize    = %s", maxSize)
 	log.Printf("maxNumber  = %d", maxNumber)
 	log.Printf("maxStorage = %s", maxStorage)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+
 	stats.inc = make(chan byteSize)
 	stats.dec = make(chan byteSize)
 	stats.ret = make(chan bool)
 	stats.report = make(chan struct{})
 	go stats.work()
+
 	for n := range workers {
 		w := &workers[n]
 		w.num = byte(n)
@@ -489,10 +504,23 @@ func main() {
 		w.get = make(chan getRequest)
 		w.del = make(chan Id)
 		w.done = make(chan struct{})
+		w.quit = make(chan struct{})
 		recovering.Add(1)
+		running.Add(1)
 		go w.work()
 	}
 	go stats.reporter()
+
+	go func() {
+		s := <-c
+		fmt.Printf("\rGot %s signal, finishing all workers...\n", s)
+		for _, w := range workers {
+			w.quit <- struct{}{}
+		}
+		running.Wait()
+		os.Exit(0)
+	}()
+
 	http.HandleFunc("/", handler)
 	log.Println("Up and running!")
 	log.Fatal(http.ListenAndServe(listen, nil))
