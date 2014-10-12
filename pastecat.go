@@ -30,6 +30,8 @@ const (
 	randTries   = 10
 	fieldName   = "paste"
 	contentType = "text/plain; charset=utf-8"
+	statsReport = 1 * time.Minute
+	deleteRetry = 2 * time.Minute
 
 	// GET error messages
 	invalidId     = "Invalid paste id."
@@ -192,7 +194,7 @@ func (s statsWorker) reporter() {
 	recovering.Wait()
 	log.Println("Finished recovering all pastes from the data directory.")
 	s.report <- struct{}{}
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(statsReport)
 	for _ = range ticker.C {
 		s.report <- struct{}{}
 	}
@@ -355,7 +357,7 @@ func (w worker) work() {
 				pasteSize = byteSize(fileInfo.Size())
 			} else {
 				log.Printf("Could not stat paste to be removed %s: %s", id, err)
-				w.DeletePasteAfter(id, 2*time.Minute)
+				w.DeletePasteAfter(id, deleteRetry)
 				break
 			}
 			if err := os.Remove(pasteInfo.Path); err == nil {
@@ -363,7 +365,7 @@ func (w worker) work() {
 				delete(w.m, id)
 			} else {
 				log.Printf("Could not remove %s: %s", id, err)
-				w.DeletePasteAfter(id, 2*time.Minute)
+				w.DeletePasteAfter(id, deleteRetry)
 				break
 			}
 
