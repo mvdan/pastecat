@@ -242,19 +242,23 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	modTime := fileInfo.ModTime()
-	deathTime := modTime.Add(lifeTime)
-	if deathTime.Before(startTime) {
-		return os.Remove(filePath)
-	}
-	if modTime.After(startTime) {
-		modTime = startTime
-	}
 	stats.inc <- byteSize(fileInfo.Size())
 	if !<-stats.ret {
 		return errors.New("Reached maximum capacity of pastes while recovering " + filePath)
 	}
-	w.m[id] = id.genPasteInfo(modTime)
-	w.DeletePasteAfter(id, deathTime.Sub(startTime))
+	if lifeTime > 0 {
+		deathTime := modTime.Add(lifeTime)
+		if deathTime.Before(startTime) {
+			return os.Remove(filePath)
+		}
+		if modTime.After(startTime) {
+			modTime = startTime
+		}
+		w.m[id] = id.genPasteInfo(modTime)
+		w.DeletePasteAfter(id, deathTime.Sub(startTime))
+	} else {
+		w.m[id] = id.genPasteInfo(modTime)
+	}
 	return nil
 }
 
