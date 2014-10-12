@@ -10,7 +10,7 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 #### Build
 
-	$ go build pastecat.go
+	$ go build
 
 #### Run
 
