@@ -16,7 +16,7 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 Quick setup:
 
-	$ pastecat -u http://my.site -l :80 -d /tmp/paste
+	$ pastecat -u http://my.site -l :80 -d /tmp/pastes
 
 Options:
 
