@@ -59,6 +59,12 @@ compression.
 A pastebin service is, by definition, aimed at plaintext only. All content is
 served in "text/plain; charset=utf-8".
 
+##### Shiny web interface
+
+You can build one on top of pastecat, using it as the backend. The builtin web
+interface is only a fallback for those cases where using the command line
+interface is not an option.
+
 ##### HTTPS
 
 Even though security could be accomplished over plain HTTP by using tools like
