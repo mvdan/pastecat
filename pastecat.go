@@ -25,12 +25,17 @@ import (
 )
 
 const (
-	idSize      = 8 // At least 4
-	rawIdSize   = idSize / 2
-	randTries   = 10
-	fieldName   = "paste"
+	// Length of the random hexadecimal ids assigned to pastes. At least 4.
+	idSize = 8
+	// Number of times to try getting a random Id
+	randTries = 10
+	// Name of the HTTP form field when uploading a paste
+	fieldName = "paste"
+	// Content-Type when serving pastes
 	contentType = "text/plain; charset=utf-8"
+	// Report usage stats how often
 	statsReport = 1 * time.Minute
+	// How long to wait before retrying to delete a file
 	deleteRetry = 2 * time.Minute
 
 	// GET error messages
@@ -46,7 +51,7 @@ const (
 )
 
 var (
-	siteUrl, listen, dataDir  string
+	siteUrl, listen, pasteDir string
 	lifeTime, timeout         time.Duration
 	maxNumber                 int
 	maxSizeStr, maxStorageStr string
@@ -60,7 +65,7 @@ var (
 func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
 	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
-	flag.StringVar(&dataDir, "d", "data", "Directory to store all the pastes in")
+	flag.StringVar(&pasteDir, "d", "pastes", "Directory to store all the pastes in")
 	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of pastes")
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
@@ -111,14 +116,14 @@ func (b byteSize) String() string {
 	return fmt.Sprintf("%dB", b)
 }
 
-type Id [rawIdSize]byte
+type Id [idSize / 2]byte
 
 func IdFromString(hexId string) (id Id, err error) {
 	if len(hexId) != idSize {
 		return id, errors.New("Invalid id at " + hexId)
 	}
 	b, err := hex.DecodeString(hexId)
-	if err != nil || len(b) != rawIdSize {
+	if err != nil || len(b) != idSize/2 {
 		return id, errors.New("Invalid id at " + hexId)
 	}
 	copy(id[:], b)
@@ -281,13 +286,13 @@ func (w worker) work() {
 	dir := hex.EncodeToString([]byte{w.num})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
-			log.Fatalf("%s/%s exists but is not a directory!", dataDir, dir)
+			log.Fatalf("%s/%s exists but is not a directory!", pasteDir, dir)
 		}
 	} else if err := os.Mkdir(dir, 0700); err != nil {
-		log.Fatalf("Could not create data directory %s/%s: %s", dataDir, dir, err)
+		log.Fatalf("Could not create data directory %s/%s: %s", pasteDir, dir, err)
 	}
 	if err := filepath.Walk(dir, w.recoverPaste); err != nil {
-		log.Fatalf("Could not recover data directory %s/%s: %s", dataDir, dir, err)
+		log.Fatalf("Could not recover data directory %s/%s: %s", pasteDir, dir, err)
 	}
 	recovering.Done()
 	defer running.Done()
@@ -395,7 +400,7 @@ func describeLimits() string {
 		limits = append(limits, fmt.Sprintf("Pastes will be deleted after %s.", lifeTime))
 	}
 	if len(limits) > 0 {
-		return strings.Join(limits, " ") + "\n\n";
+		return strings.Join(limits, " ") + "\n\n"
 	}
 	return ""
 }
@@ -478,16 +483,16 @@ func main() {
 		log.Fatalf("Invalid max storage '%s': %s", maxStorageStr, err)
 	}
 	templates = template.Must(template.ParseFiles("index.html", "form.html"))
-	if err = os.MkdirAll(dataDir, 0700); err != nil {
-		log.Fatalf("Could not create data directory %s: %s", dataDir, err)
+	if err = os.MkdirAll(pasteDir, 0700); err != nil {
+		log.Fatalf("Could not create data directory %s: %s", pasteDir, err)
 	}
-	if err = os.Chdir(dataDir); err != nil {
-		log.Fatalf("Could not enter data directory %s: %s", dataDir, err)
+	if err = os.Chdir(pasteDir); err != nil {
+		log.Fatalf("Could not enter data directory %s: %s", pasteDir, err)
 	}
 
 	log.Printf("siteUrl    = %s", siteUrl)
 	log.Printf("listen     = %s", listen)
-	log.Printf("dataDir    = %s", dataDir)
+	log.Printf("pasteDir   = %s", pasteDir)
 	log.Printf("lifeTime   = %s", lifeTime)
 	log.Printf("timeout    = %s", timeout)
 	log.Printf("maxSize    = %s", maxSize)

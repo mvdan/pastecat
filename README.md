@@ -22,7 +22,7 @@ Options:
 
 * **-u** - URL of the site - *http://localhost:8080*
 * **-l** - Host and port to listen to - *:8080*
-* **-d** - Directory to store all the pastes in - *data*
+* **-d** - Directory to store all the pastes in - *pastes*
 * **-t** - Lifetime of the pastes - *12h*
 * **-s** - Maximum size of pastes - *1M*
 * **-m** - Maximum number of pastes to store at once - *0*
@@ -57,7 +57,7 @@ compression.
 ##### Content-Types (mimetypes)
 
 A pastebin service is, by definition, aimed at plaintext only. All content is
-served in "text/plain; charset=utf-8".
+stored and served in UTF-8.
 
 ##### Shiny web interface
 
