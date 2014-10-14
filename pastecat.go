@@ -279,7 +279,7 @@ func (w worker) RandomId() (id Id, err error) {
 			return id, nil
 		}
 	}
-	return id, fmt.Errorf("Gave up trying to find an unused random id after %d tries", randTries)
+	return id, fmt.Errorf("gave up trying to find an unused random id after %d tries", randTries)
 }
 
 func (w worker) work() {
