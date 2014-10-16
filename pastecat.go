@@ -66,7 +66,7 @@ func init() {
 	flag.StringVar(&siteUrl, "u", "http://localhost:8080", "URL of the site")
 	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
 	flag.StringVar(&pasteDir, "d", "pastes", "Directory to store all the pastes in")
-	flag.DurationVar(&lifeTime, "t", 12*time.Hour, "Lifetime of the pastes")
+	flag.DurationVar(&lifeTime, "t", 24*time.Hour, "Lifetime of the pastes")
 	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of pastes")
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
 	flag.StringVar(&maxStorageStr, "M", "1G", "Maximum storage size to use at once")

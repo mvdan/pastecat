@@ -23,7 +23,7 @@ Options:
 * **-u** - URL of the site - *http://localhost:8080*
 * **-l** - Host and port to listen to - *:8080*
 * **-d** - Directory to store all the pastes in - *pastes*
-* **-t** - Lifetime of the pastes - *12h*
+* **-t** - Lifetime of the pastes - *24h*
 * **-s** - Maximum size of pastes - *1M*
 * **-m** - Maximum number of pastes to store at once - *0*
 * **-M** - Maximum storage size to use at once - *1G*
