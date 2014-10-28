@@ -65,6 +65,9 @@ You can build one on top of pastecat, using it as the backend. The builtin web
 interface is only a fallback for those cases where using the command line
 interface is not an option.
 
+This includes syntax highlighting, which can be done either via CSS on a web
+interface or via piping plaintext to programs like highlight.
+
 ##### HTTPS
 
 Even though security could be accomplished over plain HTTP by using tools like
