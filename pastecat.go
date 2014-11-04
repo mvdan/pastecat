@@ -27,7 +27,7 @@ import (
 const (
 	// Length of the random hexadecimal ids assigned to pastes. At least 4.
 	idSize = 8
-	// Number of times to try getting a random Id
+	// Number of times to try getting a random paste id
 	randTries = 10
 	// Name of the HTTP form field when uploading a paste
 	fieldName = "paste"
@@ -116,9 +116,9 @@ func (b byteSize) String() string {
 	return fmt.Sprintf("%dB", b)
 }
 
-type Id [idSize / 2]byte
+type PasteId [idSize / 2]byte
 
-func IdFromString(hexId string) (id Id, err error) {
+func PasteIdFromString(hexId string) (id PasteId, err error) {
 	if len(hexId) != idSize {
 		return id, errors.New("Invalid id at " + hexId)
 	}
@@ -130,23 +130,23 @@ func IdFromString(hexId string) (id Id, err error) {
 	return id, nil
 }
 
-func (id Id) String() string {
+func (id PasteId) String() string {
 	return hex.EncodeToString(id[:])
 }
 
-type PasteInfo struct {
+type PasteData struct {
 	Etag, Path, Expires string
 	ModTime             time.Time
 }
 
-func (id Id) genPasteInfo(modTime time.Time) (pasteInfo PasteInfo) {
-	pasteInfo.ModTime = modTime
+func (id PasteId) genPasteData(modTime time.Time) (p PasteData) {
+	p.ModTime = modTime
 	if lifeTime > 0 {
-		pasteInfo.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
+		p.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
 	}
-	pasteInfo.Etag = fmt.Sprintf("%d-%s", pasteInfo.ModTime.Unix(), id)
+	p.Etag = fmt.Sprintf("%d-%s", p.ModTime.Unix(), id)
 	hexId := id.String()
-	pasteInfo.Path = path.Join(hexId[0:2], hexId[2:])
+	p.Path = path.Join(hexId[0:2], hexId[2:])
 	return
 }
 
@@ -208,7 +208,7 @@ func (s statsWorker) reporter() {
 type getRequest struct {
 	w  http.ResponseWriter
 	r  *http.Request
-	id Id
+	id PasteId
 }
 
 type postRequest struct {
@@ -221,9 +221,9 @@ type postRequest struct {
 type worker struct {
 	num  byte
 	get  chan getRequest
-	del  chan Id
+	del  chan PasteId
 	done chan struct{}
-	m    map[Id]PasteInfo
+	m    map[PasteId]PasteData
 	quit chan struct{}
 }
 
@@ -244,7 +244,7 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 		return errors.New("Found invalid number of directories at " + filePath)
 	}
 	hexId := dirParts[0] + dirParts[1]
-	id, err := IdFromString(hexId)
+	id, err := PasteIdFromString(hexId)
 	if err != nil {
 		return err
 	}
@@ -261,15 +261,15 @@ func (w worker) recoverPaste(filePath string, fileInfo os.FileInfo, err error) e
 		if modTime.After(startTime) {
 			modTime = startTime
 		}
-		w.m[id] = id.genPasteInfo(modTime)
+		w.m[id] = id.genPasteData(modTime)
 		w.DeletePasteAfter(id, deathTime.Sub(startTime))
 	} else {
-		w.m[id] = id.genPasteInfo(modTime)
+		w.m[id] = id.genPasteData(modTime)
 	}
 	return nil
 }
 
-func (w worker) RandomId() (id Id, err error) {
+func (w worker) RandomId() (id PasteId, err error) {
 	id[0] = w.num
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[1:]); err != nil {
@@ -301,22 +301,22 @@ func (w worker) work() {
 		select {
 		case request := <-w.get:
 			done = w.done
-			pasteInfo, e := w.m[request.id]
+			pasteData, e := w.m[request.id]
 			if !e {
 				http.Error(request.w, pasteNotFound, http.StatusNotFound)
 				break
 			}
-			pasteFile, err := os.Open(pasteInfo.Path)
+			pasteFile, err := os.Open(pasteData.Path)
 			if err != nil {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			request.w.Header().Set("Etag", pasteInfo.Etag)
+			request.w.Header().Set("Etag", pasteData.Etag)
 			if lifeTime > 0 {
-				request.w.Header().Set("Expires", pasteInfo.Expires)
+				request.w.Header().Set("Expires", pasteData.Expires)
 			}
 			request.w.Header().Set("Content-Type", contentType)
-			http.ServeContent(request.w, request.r, "", pasteInfo.ModTime, pasteFile)
+			http.ServeContent(request.w, request.r, "", pasteData.ModTime, pasteFile)
 			pasteFile.Close()
 
 		case request := <-post:
@@ -333,10 +333,10 @@ func (w worker) work() {
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				break
 			}
-			pasteInfo := id.genPasteInfo(request.modTime)
-			pasteFile, err := os.OpenFile(pasteInfo.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			pasteData := id.genPasteData(request.modTime)
+			pasteFile, err := os.OpenFile(pasteData.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 			if err != nil {
-				log.Printf("Could not create new paste file %s: %s", pasteInfo.Path, err)
+				log.Printf("Could not create new paste file %s: %s", pasteData.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				stats.dec <- pasteSize
 				break
@@ -344,28 +344,28 @@ func (w worker) work() {
 			_, err = pasteFile.Write(request.content)
 			pasteFile.Close()
 			if err != nil {
-				log.Printf("Could not write data into %s: %s", pasteInfo.Path, err)
+				log.Printf("Could not write data into %s: %s", pasteData.Path, err)
 				http.Error(request.w, unknownError, http.StatusInternalServerError)
 				stats.dec <- pasteSize
 				break
 			}
-			w.m[id] = pasteInfo
+			w.m[id] = pasteData
 			if lifeTime > 0 {
 				w.DeletePasteAfter(id, lifeTime)
 			}
 			fmt.Fprintf(request.w, "%s/%s\n", siteUrl, id)
 
 		case id := <-w.del:
-			pasteInfo, _ := w.m[id]
+			pasteData, _ := w.m[id]
 			var pasteSize byteSize
-			if fileInfo, err := os.Lstat(pasteInfo.Path); err == nil {
+			if fileInfo, err := os.Lstat(pasteData.Path); err == nil {
 				pasteSize = byteSize(fileInfo.Size())
 			} else {
 				log.Printf("Could not stat paste to be removed %s: %s", id, err)
 				w.DeletePasteAfter(id, deleteRetry)
 				break
 			}
-			if err := os.Remove(pasteInfo.Path); err == nil {
+			if err := os.Remove(pasteData.Path); err == nil {
 				stats.dec <- pasteSize
 				delete(w.m, id)
 			} else {
@@ -383,7 +383,7 @@ func (w worker) work() {
 	}
 }
 
-func (w worker) DeletePasteAfter(id Id, duration time.Duration) {
+func (w worker) DeletePasteAfter(id PasteId, duration time.Duration) {
 	timer := time.NewTimer(duration)
 	go func() {
 		<-timer.C
@@ -420,7 +420,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 					siteUrl, describeLimits(), fieldName})
 			return
 		}
-		id, err := IdFromString(r.URL.Path[1:])
+		id, err := PasteIdFromString(r.URL.Path[1:])
 		if err != nil {
 			http.Error(w, invalidId, http.StatusBadRequest)
 			return
@@ -511,9 +511,9 @@ func main() {
 	for n := range workers {
 		w := &workers[n]
 		w.num = byte(n)
-		w.m = make(map[Id]PasteInfo)
+		w.m = make(map[PasteId]PasteData)
 		w.get = make(chan getRequest)
-		w.del = make(chan Id)
+		w.del = make(chan PasteId)
 		w.done = make(chan struct{})
 		w.quit = make(chan struct{})
 		recovering.Add(1)
