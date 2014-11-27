@@ -44,7 +44,7 @@ Upload a new paste via standard input:
 
 Fetch it:
 
-	$ curl ̣http://paste.cat/a63d03b9
+	$ curl http://paste.cat/a63d03b9
 	foo
 
 #### What it doesn't do
