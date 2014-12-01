@@ -16,7 +16,9 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 ##### Quick setup
 
-	$ pastecat -u http://my.site -l :80
+	$ pastecat fs -u http://my.site -l :80
+
+It will stay in the foreground and periodically print usage stats.
 
 ##### Options
 
@@ -29,18 +31,16 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 ##### Storage backends
 
+You may specify any of the following storage backends as arguments as shown in
+the quick setup example.
+
 Persistent:
 
-* **fs** *[dir]* - Use a filesystem directory structure - *(default)*
+* **fs** *[dir=pastes]* - Use a filesystem directory structure - *(default)*
 
 Non-persistent:
 
 * **mem** - Use a standard in-memory map without persistence
-
-You may specify any of the storage mechanisms above with their respective
-arguments.
-
-It will stay in the foreground and periodically print usage stats.
 
 ### Use
 
