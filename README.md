@@ -1,4 +1,4 @@
-## Pastecat
+# Pastecat
 
 A very simple and self-hosted pastebin service written in Go. Stores
 plaintext pastes in a filesystem hierarchy.
@@ -8,17 +8,17 @@ modification times will be used to recover the removal time of each paste.
 
 This software is what runs [paste.cat](http://paste.cat) for public use.
 
-#### Build
+### Build
 
 	$ go build
 
-#### Run
+### Run
 
-Quick setup:
+##### Quick setup
 
 	$ pastecat -u http://my.site -l :80
 
-Options:
+##### Options
 
 * **-u** - URL of the site - *http://localhost:8080*
 * **-l** - Host and port to listen to - *:8080*
@@ -27,13 +27,22 @@ Options:
 * **-m** - Maximum number of pastes to store at once - *0*
 * **-M** - Maximum storage size to use at once - *1G*
 
-Arguments (storage backend):
+##### Storage backends
+
+Persistent:
 
 * **fs** *[dir]* - Use a filesystem directory structure - *(default)*
 
+Non-persistent:
+
+* **mem** - Use a standard in-memory map without persistence
+
+You may specify any of the storage mechanisms above with their respective
+arguments.
+
 It will stay in the foreground and periodically print usage stats.
 
-#### Use
+### Use
 
 Set up an alias for easy usage:
 
@@ -49,7 +58,7 @@ Fetch it:
 	$ curl http://paste.cat/a63d03b9
 	foo
 
-#### What it doesn't do
+### What it doesn't do
 
 ##### Compression
 
