@@ -1,10 +1,10 @@
 # Pastecat
 
-A very simple and self-hosted pastebin service written in Go. Stores
-plaintext pastes in a filesystem hierarchy.
+A very simple and self-hosted pastebin service written in Go. Supports various
+storage backends in a modular way.
 
-Designed to remove pastes after a certain period of time. Upon restart, file
-modification times will be used to recover the removal time of each paste.
+Designed to remove pastes after a certain period of time. If using a
+persistent storage backend, pastes will be kept between restarts.
 
 This software is what runs [paste.cat](http://paste.cat) for public use.
 
@@ -16,7 +16,7 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 ##### Quick setup
 
-	$ pastecat fs -u http://my.site -l :80
+	$ pastecat -u http://my.site -l :80
 
 It will stay in the foreground and periodically print usage stats.
 
@@ -31,16 +31,16 @@ It will stay in the foreground and periodically print usage stats.
 
 ##### Storage backends
 
-You may specify any of the following storage backends as arguments as shown in
-the quick setup example.
+You may specify any of the following storage backends as arguments right after
+the options.
 
 Persistent:
 
-* **fs** *[dir=pastes]* - Use a filesystem directory structure - *(default)*
+* **fs** *[dir=pastes]* - filesystem directory structure *(default)*
 
 Non-persistent:
 
-* **mem** - Use a standard in-memory map without persistence
+* **mem** - standard in-memory map
 
 ### Use
 
