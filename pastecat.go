@@ -207,6 +207,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		} else if err != nil {
+			log.Printf("Unknown store.Get() error: %s", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -229,6 +230,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		} else if err != nil {
+			log.Printf("Unknown store.Put() error: %s", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
