@@ -3,17 +3,17 @@
 <pre>
 Set up an alias for easy usage:
 
-  $ alias pcat='curl -F "{{.FieldName}}=&lt;-" {{.SiteUrl}}'
+    $ alias pcat='curl -F "{{.FieldName}}=&lt;-" {{.SiteURL}}'
 
 Upload a new paste:
 
-  $ echo foo | pcat
-  {{.SiteUrl}}/a63d03b9
+    $ echo foo | pcat
+    {{.SiteURL}}/a63d03b9
 
 Fetch it:
 
-  $ curl {{.SiteUrl}}/a63d03b9
-  foo
+    $ curl {{.SiteURL}}/a63d03b9
+    foo
 
 Alternatively, you can use the <a href="form">web form</a>.
 

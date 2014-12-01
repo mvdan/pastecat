@@ -16,18 +16,20 @@ This software is what runs [paste.cat](http://paste.cat) for public use.
 
 Quick setup:
 
-	$ pastecat -u http://my.site -l :80 -d /tmp/pastes
+	$ pastecat -u http://my.site -l :80
 
 Options:
 
 * **-u** - URL of the site - *http://localhost:8080*
 * **-l** - Host and port to listen to - *:8080*
-* **-d** - Directory to store all the pastes in - *pastes*
 * **-t** - Lifetime of the pastes - *24h*
 * **-s** - Maximum size of pastes - *1M*
 * **-m** - Maximum number of pastes to store at once - *0*
 * **-M** - Maximum storage size to use at once - *1G*
-* **-T** - Timeout of requests - *200ms*
+
+Arguments (storage backend):
+
+* **fs** *[dir]* - Use a filesystem directory structure - *(default)*
 
 It will stay in the foreground and periodically print usage stats.
 
