@@ -266,21 +266,20 @@ func main() {
 	storageType := "fs"
 	if len(args) > 0 {
 		storageType = args[0]
-		args = args[1:]
 	}
 	switch storageType {
 	case "fs":
-		if len(args) > 1 {
+		if len(args) > 2 {
 			log.Fatalf("Too many arguments given for %s", storageType)
 		}
 		pasteDir := "pastes"
-		if len(args) > 0 {
-			pasteDir = args[0]
+		if len(args) > 1 {
+			pasteDir = args[1]
 		}
 		log.Printf("Starting up file store in the directory '%s'", pasteDir)
 		store, err = newFileStore(pasteDir, maxNumber, maxStorage, lifeTime)
 	case "mem":
-		if len(args) > 0 {
+		if len(args) > 1 {
 			log.Fatalf("Too many arguments given for %s", storageType)
 		}
 		log.Printf("Starting up in-memory store")
