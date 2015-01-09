@@ -177,6 +177,7 @@ func setupPasteDeletion(id ID) {
 			if err == nil {
 				break
 			}
+			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
 			timer.Reset(deleteRetry)
 		}
 	}()
@@ -207,7 +208,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		} else if err != nil {
-			log.Printf("Unknown store.Get() error: %s", err)
+			log.Printf("Unknown error on GET: %s", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -230,7 +231,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		} else if err != nil {
-			log.Printf("Unknown store.Put() error: %s", err)
+			log.Printf("Unknown error on POST: %s", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -291,7 +292,6 @@ func main() {
 		log.Fatalf("Could not start %s paste store: %s", storageType, err)
 	}
 
-	log.Println(store.Report())
 	ticker := time.NewTicker(statsReport)
 	go func() {
 		for _ = range ticker.C {
@@ -300,5 +300,6 @@ func main() {
 	}()
 	http.HandleFunc("/", handler)
 	log.Println("Up and running!")
+	log.Println(store.Report())
 	log.Fatal(http.ListenAndServe(listen, nil))
 }

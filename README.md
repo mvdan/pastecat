@@ -36,7 +36,7 @@ the options.
 
 Persistent:
 
-* **fs** *[dir=pastes]* - filesystem directory structure *(default)*
+* **fs** *[dir=pastes]* - filesystem structure *(default)*
 
 Non-persistent:
 
