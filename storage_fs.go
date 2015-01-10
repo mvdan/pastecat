@@ -127,8 +127,8 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	modTime := fileInfo.ModTime()
+	deathTime := modTime.Add(s.lifeTime)
 	if s.lifeTime > 0 {
-		deathTime := modTime.Add(s.lifeTime)
 		if deathTime.Before(startTime) {
 			return os.Remove(pastePath)
 		}
@@ -140,11 +140,13 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 		return ErrReachedMax
 	}
 	s.stats.makeSpaceFor(size)
+	lifeLeft := deathTime.Sub(startTime)
 	cached := fileCache{
 		header: genHeader(id, s.lifeTime, modTime, size),
 		path:   pastePath,
 	}
 	s.cache[id] = cached
+	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 

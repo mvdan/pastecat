@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -71,4 +72,22 @@ func genHeader(id ID, lifeTime time.Duration, modTime time.Time, size ByteSize) 
 	}
 	p.Etag = fmt.Sprintf("%d-%s", p.ModTime.Unix(), id)
 	return
+}
+
+func SetupPasteDeletion(store Store, id ID, lifeTime time.Duration) {
+	if lifeTime == 0 {
+		return
+	}
+	timer := time.NewTimer(lifeTime)
+	go func() {
+		for {
+			<-timer.C
+			err := store.Delete(id)
+			if err == nil {
+				break
+			}
+			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
+			timer.Reset(deleteRetry)
+		}
+	}()
 }

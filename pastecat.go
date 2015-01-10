@@ -165,24 +165,6 @@ func getContentFromForm(r *http.Request) (content []byte, err error) {
 	return content, err
 }
 
-func setupPasteDeletion(id ID) {
-	if lifeTime == 0 {
-		return
-	}
-	timer := time.NewTimer(lifeTime)
-	go func() {
-		for {
-			<-timer.C
-			err := store.Delete(id)
-			if err == nil {
-				break
-			}
-			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
-			timer.Reset(deleteRetry)
-		}
-	}()
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -235,7 +217,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		setupPasteDeletion(id)
+		SetupPasteDeletion(store, id, lifeTime)
 		fmt.Fprintf(w, "%s/%s\n", siteURL, id)
 
 	default:
