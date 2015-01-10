@@ -26,15 +26,15 @@ type Store interface {
 }
 
 type Stats struct {
-	number, maxNumber   int
-	storage, maxStorage ByteSize
+	number  int
+	storage ByteSize
 }
 
 func (s *Stats) hasSpaceFor(size ByteSize) bool {
-	if s.maxNumber > 0 && s.number >= s.maxNumber {
+	if maxNumber > 0 && s.number >= maxNumber {
 		return false
 	}
-	if s.maxStorage > 0 && s.storage+size > s.maxStorage {
+	if maxStorage > 0 && s.storage+size > maxStorage {
 		return false
 	}
 	return true
@@ -52,14 +52,14 @@ func (s *Stats) freeSpace(size ByteSize) {
 
 func (s *Stats) Report() string {
 	numberStat := fmt.Sprintf("%d", s.number)
-	if s.maxNumber > 0 {
+	if maxNumber > 0 {
 		numberStat += fmt.Sprintf(" (%.2f%% out of %d)",
-			float64(s.number*100)/float64(s.maxNumber), s.maxNumber)
+			float64(s.number*100)/float64(maxNumber), maxNumber)
 	}
 	sizeStat := fmt.Sprintf("%s", s.storage)
-	if s.maxStorage > 0 {
+	if maxStorage > 0 {
 		sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
-			float64(s.storage*100)/float64(s.maxStorage), s.maxStorage)
+			float64(s.storage*100)/float64(maxStorage), maxStorage)
 	}
 	return fmt.Sprintf("Have a total of %s pastes using %s", numberStat, sizeStat)
 }

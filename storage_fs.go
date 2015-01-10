@@ -20,8 +20,8 @@ type FileStore struct {
 	sync.RWMutex
 	cache map[ID]fileCache
 
-	dir      string
-	stats    Stats
+	dir   string
+	stats Stats
 }
 
 type fileCache struct {
@@ -29,7 +29,7 @@ type fileCache struct {
 	path   string
 }
 
-func newFileStore(dir string, maxNumber int, maxStorage ByteSize) (s *FileStore, err error) {
+func newFileStore(dir string) (s *FileStore, err error) {
 
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -41,7 +41,6 @@ func newFileStore(dir string, maxNumber int, maxStorage ByteSize) (s *FileStore,
 	s = new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	s.stats = Stats{maxNumber: maxNumber, maxStorage: maxStorage}
 
 	for i := 0; i < 256; i++ {
 		if err = s.setupSubdir(byte(i)); err != nil {

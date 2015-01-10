@@ -68,7 +68,7 @@ type MemStore struct {
 	sync.RWMutex
 	store map[ID]memCache
 
-	stats    Stats
+	stats Stats
 }
 
 type memCache struct {
@@ -76,10 +76,9 @@ type memCache struct {
 	content []byte
 }
 
-func newMemStore(maxNumber int, maxStorage ByteSize) (s *MemStore, err error) {
+func newMemStore() (s *MemStore, err error) {
 	s = new(MemStore)
 	s.store = make(map[ID]memCache)
-	s.stats = Stats{maxNumber: maxNumber, maxStorage: maxStorage}
 	return
 }
 
