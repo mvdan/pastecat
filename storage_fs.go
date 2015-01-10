@@ -127,6 +127,12 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	modTime := fileInfo.ModTime()
+	if s.lifeTime > 0 {
+		deathTime := modTime.Add(s.lifeTime)
+		if deathTime.Before(startTime) {
+			return os.Remove(pastePath)
+		}
+	}
 	size := ByteSize(fileInfo.Size())
 	s.Lock()
 	defer s.Unlock()
@@ -137,12 +143,6 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 	cached := fileCache{
 		header: genHeader(id, s.lifeTime, modTime, size),
 		path:   pastePath,
-	}
-	if s.lifeTime > 0 {
-		deathTime := modTime.Add(s.lifeTime)
-		if deathTime.Before(startTime) {
-			return os.Remove(pastePath)
-		}
 	}
 	s.cache[id] = cached
 	return nil
