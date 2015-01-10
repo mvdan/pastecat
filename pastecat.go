@@ -259,13 +259,13 @@ func main() {
 			pasteDir = args[1]
 		}
 		log.Printf("Starting up file store in the directory '%s'", pasteDir)
-		store, err = newFileStore(pasteDir, maxNumber, maxStorage, lifeTime)
+		store, err = newFileStore(pasteDir, maxNumber, maxStorage)
 	case "mem":
 		if len(args) > 1 {
 			log.Fatalf("Too many arguments given for %s", storageType)
 		}
 		log.Printf("Starting up in-memory store")
-		store, err = newMemStore(maxNumber, maxStorage, lifeTime)
+		store, err = newMemStore(maxNumber, maxStorage)
 	default:
 		log.Fatalf("Unknown paste store type '%s'", storageType)
 	}

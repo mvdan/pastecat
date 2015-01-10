@@ -21,7 +21,6 @@ type FileStore struct {
 	cache map[ID]fileCache
 
 	dir      string
-	lifeTime time.Duration
 	stats    Stats
 }
 
@@ -30,7 +29,7 @@ type fileCache struct {
 	path   string
 }
 
-func newFileStore(dir string, maxNumber int, maxStorage ByteSize, lifeTime time.Duration) (s *FileStore, err error) {
+func newFileStore(dir string, maxNumber int, maxStorage ByteSize) (s *FileStore, err error) {
 
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -42,7 +41,6 @@ func newFileStore(dir string, maxNumber int, maxStorage ByteSize, lifeTime time.
 	s = new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	s.lifeTime = lifeTime
 	s.stats = Stats{maxNumber: maxNumber, maxStorage: maxStorage}
 
 	for i := 0; i < 256; i++ {
@@ -89,7 +87,7 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	}
 	s.stats.makeSpaceFor(size)
 	s.cache[id] = fileCache{
-		header: genHeader(id, s.lifeTime, time.Now(), size),
+		header: genHeader(id, time.Now(), size),
 		path:   pastePath,
 	}
 	return id, nil
@@ -127,8 +125,8 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	modTime := fileInfo.ModTime()
-	deathTime := modTime.Add(s.lifeTime)
-	if s.lifeTime > 0 {
+	deathTime := modTime.Add(lifeTime)
+	if lifeTime > 0 {
 		if deathTime.Before(startTime) {
 			return os.Remove(pastePath)
 		}
@@ -142,7 +140,7 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 	s.stats.makeSpaceFor(size)
 	lifeLeft := deathTime.Sub(startTime)
 	cached := fileCache{
-		header: genHeader(id, s.lifeTime, modTime, size),
+		header: genHeader(id, modTime, size),
 		path:   pastePath,
 	}
 	s.cache[id] = cached

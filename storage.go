@@ -64,7 +64,7 @@ func (s *Stats) Report() string {
 	return fmt.Sprintf("Have a total of %s pastes using %s", numberStat, sizeStat)
 }
 
-func genHeader(id ID, lifeTime time.Duration, modTime time.Time, size ByteSize) (p Header) {
+func genHeader(id ID, modTime time.Time, size ByteSize) (p Header) {
 	p.ModTime = modTime
 	p.Size = size
 	if lifeTime > 0 {
@@ -74,11 +74,11 @@ func genHeader(id ID, lifeTime time.Duration, modTime time.Time, size ByteSize) 
 	return
 }
 
-func SetupPasteDeletion(store Store, id ID, lifeTime time.Duration) {
-	if lifeTime == 0 {
+func SetupPasteDeletion(store Store, id ID, after time.Duration) {
+	if after == 0 {
 		return
 	}
-	timer := time.NewTimer(lifeTime)
+	timer := time.NewTimer(after)
 	go func() {
 		for {
 			<-timer.C

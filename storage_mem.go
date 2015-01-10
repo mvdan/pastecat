@@ -68,7 +68,6 @@ type MemStore struct {
 	sync.RWMutex
 	store map[ID]memCache
 
-	lifeTime time.Duration
 	stats    Stats
 }
 
@@ -77,9 +76,8 @@ type memCache struct {
 	content []byte
 }
 
-func newMemStore(maxNumber int, maxStorage ByteSize, lifeTime time.Duration) (s *MemStore, err error) {
+func newMemStore(maxNumber int, maxStorage ByteSize) (s *MemStore, err error) {
 	s = new(MemStore)
-	s.lifeTime = lifeTime
 	s.store = make(map[ID]memCache)
 	s.stats = Stats{maxNumber: maxNumber, maxStorage: maxStorage}
 	return
@@ -108,7 +106,7 @@ func (s *MemStore) Put(content []byte) (id ID, err error) {
 	}
 	s.stats.makeSpaceFor(size)
 	s.store[id] = memCache{
-		header:  genHeader(id, s.lifeTime, time.Now(), size),
+		header:  genHeader(id, time.Now(), size),
 		content: content,
 	}
 	return id, nil
