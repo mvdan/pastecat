@@ -93,7 +93,10 @@ func (b *ByteSize) Set(value string) error {
 		return errors.New("invalid byte size")
 	}
 	parts := regexByteSize.FindStringSubmatch(value)
-	size, _ := strconv.ParseFloat(string(parts[1]), 64)
+	size, err := strconv.ParseFloat(string(parts[1]), 64)
+	if err != nil {
+		return err
+	}
 	*b = ByteSize(size)
 	switch string(parts[2]) {
 	case "KB", "K":
