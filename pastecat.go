@@ -67,11 +67,11 @@ type ID [idSize / 2]byte
 
 func IDFromString(hexID string) (id ID, err error) {
 	if len(hexID) != idSize {
-		return id, errors.New("Invalid id at " + hexID)
+		return id, errors.New("invalid id at " + hexID)
 	}
 	b, err := hex.DecodeString(hexID)
 	if err != nil || len(b) != idSize/2 {
-		return id, errors.New("Invalid id at " + hexID)
+		return id, errors.New("invalid id at " + hexID)
 	}
 	copy(id[:], b)
 	return id, nil
