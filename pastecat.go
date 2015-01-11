@@ -186,8 +186,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var err error
 	flag.Parse()
-	templates = template.Must(template.ParseFiles(
-		"tmpl/index.html", "tmpl/form.html"))
+	templates = template.Must(template.ParseGlob("tmpl/*.html"))
 
 	log.Printf("siteURL    = %s", siteURL)
 	log.Printf("listen     = %s", listen)
