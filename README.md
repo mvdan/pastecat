@@ -25,8 +25,8 @@ It will stay in the foreground and periodically print usage stats.
 * **-u** - URL of the site - *http://localhost:8080*
 * **-l** - Host and port to listen to - *:8080*
 * **-t** - Lifetime of the pastes - *24h*
-* **-s** - Maximum size of pastes - *1M*
 * **-m** - Maximum number of pastes to store at once - *0*
+* **-s** - Maximum size of pastes - *1M*
 * **-M** - Maximum storage size to use at once - *1G*
 
 ##### Storage backends

@@ -41,13 +41,14 @@ const (
 )
 
 var (
-	siteURL, listen           string
-	lifeTime                  time.Duration
-	maxNumber                 int
-	maxSizeStr, maxStorageStr string
-	maxSize, maxStorage       ByteSize
-	templates                 *template.Template
+	siteURL, listen string
+	lifeTime        time.Duration
+	maxNumber       int
 
+	maxSize    = ByteSize(1 * mbyte)
+	maxStorage = ByteSize(1 * gbyte)
+
+	templates     *template.Template
 	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B?)$`)
 	startTime     = time.Now()
 
@@ -58,9 +59,9 @@ func init() {
 	flag.StringVar(&siteURL, "u", "http://localhost:8080", "URL of the site")
 	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
 	flag.DurationVar(&lifeTime, "t", 24*time.Hour, "Lifetime of the pastes")
-	flag.StringVar(&maxSizeStr, "s", "1M", "Maximum size of pastes")
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
-	flag.StringVar(&maxStorageStr, "M", "1G", "Maximum storage size to use at once")
+	flag.Var(&maxSize, "s", "Maximum size of pastes")
+	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
 
 type ByteSize int64
@@ -73,29 +74,10 @@ const (
 	tbyte
 )
 
-func parseByteSize(str string) (ByteSize, error) {
-	if !regexByteSize.MatchString(str) {
-		return 0, errors.New("Could not parse size in bytes")
-	}
-	parts := regexByteSize.FindStringSubmatch(str)
-	size, _ := strconv.ParseFloat(string(parts[1]), 64)
-	switch string(parts[2]) {
-	case "KB", "K":
-		size *= float64(kbyte)
-	case "MB", "M":
-		size *= float64(mbyte)
-	case "GB", "G":
-		size *= float64(gbyte)
-	case "TB", "T":
-		size *= float64(tbyte)
-	}
-	return ByteSize(size), nil
-}
-
 func (b ByteSize) String() string {
 	switch {
 	case b >= tbyte:
-		return fmt.Sprintf("%.2fGB", float64(b)/float64(tbyte))
+		return fmt.Sprintf("%.2fTB", float64(b)/float64(tbyte))
 	case b >= gbyte:
 		return fmt.Sprintf("%.2fGB", float64(b)/float64(gbyte))
 	case b >= mbyte:
@@ -104,6 +86,26 @@ func (b ByteSize) String() string {
 		return fmt.Sprintf("%.2fKB", float64(b)/float64(kbyte))
 	}
 	return fmt.Sprintf("%dB", b)
+}
+
+func (b *ByteSize) Set(value string) error {
+	if !regexByteSize.MatchString(value) {
+		return errors.New("invalid byte size")
+	}
+	parts := regexByteSize.FindStringSubmatch(value)
+	size, _ := strconv.ParseFloat(string(parts[1]), 64)
+	*b = ByteSize(size)
+	switch string(parts[2]) {
+	case "KB", "K":
+		*b *= kbyte
+	case "MB", "M":
+		*b *= mbyte
+	case "GB", "G":
+		*b *= gbyte
+	case "TB", "T":
+		*b *= tbyte
+	}
+	return nil
 }
 
 type ID [idSize / 2]byte
@@ -229,12 +231,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var err error
 	flag.Parse()
-	if maxSize, err = parseByteSize(maxSizeStr); err != nil {
-		log.Fatalf("Invalid max size '%s': %s", maxSizeStr, err)
-	}
-	if maxStorage, err = parseByteSize(maxStorageStr); err != nil {
-		log.Fatalf("Invalid max storage '%s': %s", maxStorageStr, err)
-	}
 	templates = template.Must(template.ParseFiles("index.html", "form.html"))
 
 	log.Printf("siteURL    = %s", siteURL)
