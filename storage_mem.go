@@ -96,7 +96,7 @@ func (s *MemStore) Get(id ID) (Content, *Header, error) {
 func (s *MemStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
-	size := ByteSize(len(content))
+	size := int64(len(content))
 	if !s.stats.hasSpaceFor(size) {
 		return id, ErrReachedMax
 	}

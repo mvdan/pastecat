@@ -27,25 +27,25 @@ type Store interface {
 
 type Stats struct {
 	number  int
-	storage ByteSize
+	storage int64
 }
 
-func (s *Stats) hasSpaceFor(size ByteSize) bool {
+func (s *Stats) hasSpaceFor(size int64) bool {
 	if maxNumber > 0 && s.number >= maxNumber {
 		return false
 	}
-	if maxStorage > 0 && s.storage+size > maxStorage {
+	if maxStorage > 0 && s.storage+size > int64(maxStorage) {
 		return false
 	}
 	return true
 }
 
-func (s *Stats) makeSpaceFor(size ByteSize) {
+func (s *Stats) makeSpaceFor(size int64) {
 	s.number++
 	s.storage += size
 }
 
-func (s *Stats) freeSpace(size ByteSize) {
+func (s *Stats) freeSpace(size int64) {
 	s.number--
 	s.storage -= size
 }
@@ -56,7 +56,7 @@ func (s *Stats) Report() string {
 		numberStat += fmt.Sprintf(" (%.2f%% out of %d)",
 			float64(s.number*100)/float64(maxNumber), maxNumber)
 	}
-	sizeStat := fmt.Sprintf("%s", s.storage)
+	sizeStat := fmt.Sprintf("%s", ByteSize(s.storage))
 	if maxStorage > 0 {
 		sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
 			float64(s.storage*100)/float64(maxStorage), maxStorage)
@@ -64,7 +64,7 @@ func (s *Stats) Report() string {
 	return fmt.Sprintf("Have a total of %s pastes using %s", numberStat, sizeStat)
 }
 
-func genHeader(id ID, modTime time.Time, size ByteSize) (p Header) {
+func genHeader(id ID, modTime time.Time, size int64) (p Header) {
 	p.ModTime = modTime
 	p.Size = size
 	if lifeTime > 0 {

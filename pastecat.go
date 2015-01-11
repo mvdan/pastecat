@@ -45,11 +45,11 @@ var (
 	lifeTime        time.Duration
 	maxNumber       int
 
-	maxSize    = ByteSize(1 * mbyte)
-	maxStorage = ByteSize(1 * gbyte)
+	maxSize    = ByteSize(1 * MB)
+	maxStorage = ByteSize(1 * GB)
 
 	templates     *template.Template
-	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGT]?B?)$`)
+	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGTPEZY]?B?)$`)
 	startTime     = time.Now()
 
 	store Store
@@ -64,28 +64,40 @@ func init() {
 	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
 
-type ByteSize int64
+type ByteSize float64
 
 const (
-	_ ByteSize = 1 << (10 * iota)
-	kbyte
-	mbyte
-	gbyte
-	tbyte
+	_           = iota
+	KB ByteSize = 1 << (10 * iota)
+	MB
+	GB
+	TB
+	PB
+	EB
+	ZB
+	YB
 )
 
 func (b ByteSize) String() string {
 	switch {
-	case b >= tbyte:
-		return fmt.Sprintf("%.2fTB", float64(b)/float64(tbyte))
-	case b >= gbyte:
-		return fmt.Sprintf("%.2fGB", float64(b)/float64(gbyte))
-	case b >= mbyte:
-		return fmt.Sprintf("%.2fMB", float64(b)/float64(mbyte))
-	case b >= kbyte:
-		return fmt.Sprintf("%.2fKB", float64(b)/float64(kbyte))
+	case b >= YB:
+		return fmt.Sprintf("%.2fYB", b/YB)
+	case b >= ZB:
+		return fmt.Sprintf("%.2fZB", b/ZB)
+	case b >= EB:
+		return fmt.Sprintf("%.2fEB", b/EB)
+	case b >= PB:
+		return fmt.Sprintf("%.2fPB", b/PB)
+	case b >= TB:
+		return fmt.Sprintf("%.2fTB", b/TB)
+	case b >= GB:
+		return fmt.Sprintf("%.2fGB", b/GB)
+	case b >= MB:
+		return fmt.Sprintf("%.2fMB", b/MB)
+	case b >= KB:
+		return fmt.Sprintf("%.2fKB", b/KB)
 	}
-	return fmt.Sprintf("%dB", b)
+	return fmt.Sprintf("%.2fB", b)
 }
 
 func (b *ByteSize) Set(value string) error {
@@ -100,13 +112,21 @@ func (b *ByteSize) Set(value string) error {
 	*b = ByteSize(size)
 	switch string(parts[2]) {
 	case "KB", "K":
-		*b *= kbyte
+		*b *= KB
 	case "MB", "M":
-		*b *= mbyte
+		*b *= MB
 	case "GB", "G":
-		*b *= gbyte
+		*b *= GB
 	case "TB", "T":
-		*b *= tbyte
+		*b *= TB
+	case "PB", "P":
+		*b *= PB
+	case "EB", "E":
+		*b *= EB
+	case "ZB", "Z":
+		*b *= ZB
+	case "YB", "Y":
+		*b *= YB
 	}
 	return nil
 }
@@ -132,7 +152,7 @@ func (id ID) String() string {
 type Header struct {
 	Etag, Expires string
 	ModTime       time.Time
-	Size          ByteSize
+	Size          int64
 }
 
 type Content interface {

@@ -67,7 +67,7 @@ func (s *FileStore) Get(id ID) (Content, *Header, error) {
 func (s *FileStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
-	size := ByteSize(len(content))
+	size := int64(len(content))
 	if !s.stats.hasSpaceFor(size) {
 		return id, ErrReachedMax
 	}
@@ -130,7 +130,7 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 			return os.Remove(pastePath)
 		}
 	}
-	size := ByteSize(fileInfo.Size())
+	size := fileInfo.Size()
 	s.Lock()
 	defer s.Unlock()
 	if !s.stats.hasSpaceFor(size) {
