@@ -13,10 +13,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mvdan/bytesize"
 )
 
 const (
@@ -45,11 +45,10 @@ var (
 	lifeTime        time.Duration
 	maxNumber       int
 
-	maxSize    = ByteSize(1 * MB)
-	maxStorage = ByteSize(1 * GB)
+	maxSize    = bytesize.ByteSize(1 * bytesize.MB)
+	maxStorage = bytesize.ByteSize(1 * bytesize.GB)
 
 	templates     *template.Template
-	regexByteSize = regexp.MustCompile(`^([\d\.]+)\s*([KMGTPEZY]?B?)$`)
 	startTime     = time.Now()
 
 	store Store
@@ -62,73 +61,6 @@ func init() {
 	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
 	flag.Var(&maxSize, "s", "Maximum size of pastes")
 	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
-}
-
-type ByteSize float64
-
-const (
-	_           = iota
-	KB ByteSize = 1 << (10 * iota)
-	MB
-	GB
-	TB
-	PB
-	EB
-	ZB
-	YB
-)
-
-func (b ByteSize) String() string {
-	switch {
-	case b >= YB:
-		return fmt.Sprintf("%.2fYB", b/YB)
-	case b >= ZB:
-		return fmt.Sprintf("%.2fZB", b/ZB)
-	case b >= EB:
-		return fmt.Sprintf("%.2fEB", b/EB)
-	case b >= PB:
-		return fmt.Sprintf("%.2fPB", b/PB)
-	case b >= TB:
-		return fmt.Sprintf("%.2fTB", b/TB)
-	case b >= GB:
-		return fmt.Sprintf("%.2fGB", b/GB)
-	case b >= MB:
-		return fmt.Sprintf("%.2fMB", b/MB)
-	case b >= KB:
-		return fmt.Sprintf("%.2fKB", b/KB)
-	}
-	return fmt.Sprintf("%.2fB", b)
-}
-
-func (b *ByteSize) Set(value string) error {
-	if !regexByteSize.MatchString(value) {
-		return errors.New("invalid byte size")
-	}
-	parts := regexByteSize.FindStringSubmatch(value)
-	size, err := strconv.ParseFloat(string(parts[1]), 64)
-	if err != nil {
-		return err
-	}
-	*b = ByteSize(size)
-	switch string(parts[2]) {
-	case "KB", "K":
-		*b *= KB
-	case "MB", "M":
-		*b *= MB
-	case "GB", "G":
-		*b *= GB
-	case "TB", "T":
-		*b *= TB
-	case "PB", "P":
-		*b *= PB
-	case "EB", "E":
-		*b *= EB
-	case "ZB", "Z":
-		*b *= ZB
-	case "YB", "Y":
-		*b *= YB
-	}
-	return nil
 }
 
 type ID [idSize / 2]byte

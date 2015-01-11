@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/mvdan/bytesize"
 )
 
 var (
@@ -56,7 +58,7 @@ func (s *Stats) Report() string {
 		numberStat += fmt.Sprintf(" (%.2f%% out of %d)",
 			float64(s.number*100)/float64(maxNumber), maxNumber)
 	}
-	sizeStat := fmt.Sprintf("%s", ByteSize(s.storage))
+	sizeStat := fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
 	if maxStorage > 0 {
 		sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
 			float64(s.storage*100)/float64(maxStorage), maxStorage)
