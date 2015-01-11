@@ -45,11 +45,11 @@ var (
 	lifeTime        time.Duration
 	maxNumber       int
 
-	maxSize    = bytesize.ByteSize(1 * bytesize.MB)
-	maxStorage = bytesize.ByteSize(1 * bytesize.GB)
+	maxSize    = 1 * bytesize.MB
+	maxStorage = 1 * bytesize.GB
 
-	templates     *template.Template
-	startTime     = time.Now()
+	templates *template.Template
+	startTime = time.Now()
 
 	store Store
 )
