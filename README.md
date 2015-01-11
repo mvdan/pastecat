@@ -1,12 +1,12 @@
 # Pastecat
 
-A very simple and self-hosted pastebin service written in Go. Supports various
-storage backends in a modular way.
+A very simple and self-hosted pastebin service written in Go. Can use multiple
+storage backends.
 
 Designed to remove pastes after a certain period of time. If using a
 persistent storage backend, pastes will be kept between restarts.
 
-This software is what runs [paste.cat](http://paste.cat) for public use.
+This software is what runs the [paste.cat](http://paste.cat) public service.
 
 ### Build
 
@@ -36,7 +36,7 @@ the options.
 
 Persistent:
 
-* **fs** *[dir=pastes]* - filesystem structure *(default)*
+* **fs** *[directory]* - filesystem structure *(default)*
 
 Non-persistent:
 
@@ -72,18 +72,14 @@ stored and served in UTF-8.
 
 ##### Shiny web interface
 
-You can build one on top of pastecat, using it as the backend. The builtin web
-interface is only a fallback for those cases where using the command line
-interface is not an option.
+You can build one on top with pastecat as the backend. The builtin web
+interface is only a fallback for when the command line is not available.
 
-This includes syntax highlighting, which can be done either via CSS on a web
-interface or via piping plaintext to programs like highlight.
+This includes syntax highlighting of any kind.
 
 ##### HTTPS
 
-Even though security could be accomplished over plain HTTP by using tools like
-GnuPG on the client side, for privacy reasons you might want to support HTTPS
-as well.
+Even though you could encrypt pastes with tools like GnuPG, for privacy
+reasons you might want to support HTTPS too.
 
-In such cases, running pastecat behind a reverse proxy like Nginx is the best
-option. HTTP servers should have lots of features including TLS support.
+In such cases, you can run pastecat behind a reverse proxy like Nginx.
