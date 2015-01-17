@@ -30,18 +30,15 @@ type fileCache struct {
 }
 
 func newFileStore(dir string) (s *FileStore, err error) {
-
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	if err = os.Chdir(dir); err != nil {
 		return nil, err
 	}
-
 	s = new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-
 	for i := 0; i < 256; i++ {
 		if err = s.setupSubdir(byte(i)); err != nil {
 			return nil, err
