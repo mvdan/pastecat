@@ -8,6 +8,22 @@ persistent storage backend, pastes will be kept between restarts.
 
 This software is what runs the [paste.cat](http://paste.cat) public service.
 
+### Use
+
+Set up an alias:
+
+	$ alias pcat='curl -F "paste=<-" http://paste.cat'
+
+Upload a new paste:
+
+	$ echo foo | pcat
+	http://paste.cat/a63d03b9
+
+Fetch it:
+
+	$ curl http://paste.cat/a63d03b9
+	foo
+
 ### Build
 
 	$ go build
@@ -42,22 +58,6 @@ Persistent:
 Non-persistent:
 
 * **mem** - standard in-memory map
-
-### Use
-
-Set up an alias for easy usage:
-
-	$ alias pcat='curl -F "paste=<-" http://paste.cat'
-
-Upload a new paste via standard input:
-
-	$ echo foo | pcat
-	http://paste.cat/a63d03b9
-
-Fetch it:
-
-	$ curl http://paste.cat/a63d03b9
-	foo
 
 ### What it doesn't do
 
