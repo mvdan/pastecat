@@ -37,6 +37,7 @@ the options.
 Persistent:
 
 * **fs** *[directory]* - filesystem structure *(default)*
+* **mmap** *[directory]* - mmapped filesystem structure
 
 Non-persistent:
 

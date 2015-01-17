@@ -7,62 +7,62 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
-type FileStore struct {
+type MmapStore struct {
 	sync.RWMutex
-	cache map[ID]fileCache
+	cache map[ID]mmapCache
 
 	dir   string
 	stats Stats
 }
 
-type fileCache struct {
+type mmapCache struct {
 	reading sync.WaitGroup
 	header  Header
 	path    string
+	mmap    []byte
 }
 
-type fileContent struct {
-	file    *os.File
+type mmapContent struct {
+	content bufferContent
 	reading *sync.WaitGroup
 }
 
-func (c fileContent) Read(p []byte) (n int, err error) {
-	return c.file.Read(p)
+func (c mmapContent) Read(p []byte) (n int, err error) {
+	return c.content.Read(p)
 }
 
-func (c fileContent) ReadAt(p []byte, off int64) (n int, err error) {
-	return c.file.ReadAt(p, off)
+func (c mmapContent) ReadAt(p []byte, off int64) (n int, err error) {
+	return c.content.ReadAt(p, off)
 }
 
-func (c fileContent) Seek(offset int64, whence int) (int64, error) {
-	return c.file.Seek(offset, whence)
+func (c mmapContent) Seek(offset int64, whence int) (int64, error) {
+	return c.content.Seek(offset, whence)
 }
 
-func (c fileContent) Close() error {
-	err := c.file.Close()
+func (c mmapContent) Close() error {
 	c.reading.Done()
-	return err
+	return nil
 }
 
-func newFileStore(dir string) (s *FileStore, err error) {
+func newMmapStore(dir string) (s *MmapStore, err error) {
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	if err = os.Chdir(dir); err != nil {
 		return nil, err
 	}
-	s = new(FileStore)
+	s = new(MmapStore)
 	s.dir = dir
-	s.cache = make(map[ID]fileCache)
+	s.cache = make(map[ID]mmapCache)
 	for i := 0; i < 256; i++ {
 		if err = s.setupSubdir(byte(i)); err != nil {
 			return nil, err
@@ -71,37 +71,19 @@ func newFileStore(dir string) (s *FileStore, err error) {
 	return
 }
 
-func (s *FileStore) Get(id ID) (Content, *Header, error) {
+func (s *MmapStore) Get(id ID) (Content, *Header, error) {
 	s.RLock()
 	defer s.RUnlock()
 	cached, e := s.cache[id]
 	if !e {
 		return nil, nil, ErrPasteNotFound
 	}
-	f, err := os.Open(cached.path)
-	if err != nil {
-		return nil, nil, err
-	}
+	content := bufferContent{b: cached.mmap}
 	cached.reading.Add(1)
-	return fileContent{f, &cached.reading}, &cached.header, nil
+	return mmapContent{content, &cached.reading}, &cached.header, nil
 }
 
-func writeNewFile(filename string, data []byte) error {
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return err
-	}
-	n, err := f.Write(data)
-	if err == nil && n < len(data) {
-		err = io.ErrShortWrite
-	}
-	if err1 := f.Close(); err == nil {
-		err = err1
-	}
-	return err
-}
-
-func (s *FileStore) Put(content []byte) (id ID, err error) {
+func (s *MmapStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
@@ -120,15 +102,21 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
+	f, err := os.Open(pastePath)
+	data, err := getMmap(f, len(content))
+	if err != nil {
+		return
+	}
 	s.stats.makeSpaceFor(size)
-	s.cache[id] = fileCache{
+	s.cache[id] = mmapCache{
 		header: genHeader(id, time.Now(), size),
 		path:   pastePath,
+		mmap:   data,
 	}
 	return id, nil
 }
 
-func (s *FileStore) Delete(id ID) error {
+func (s *MmapStore) Delete(id ID) error {
 	s.Lock()
 	defer s.Unlock()
 	cached, e := s.cache[id]
@@ -137,6 +125,9 @@ func (s *FileStore) Delete(id ID) error {
 	}
 	delete(s.cache, id)
 	cached.reading.Wait()
+	if err := syscall.Munmap(cached.mmap); err != nil {
+		return err
+	}
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
@@ -144,7 +135,7 @@ func (s *FileStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) error {
+func (s *MmapStore) Recover(pastePath string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
@@ -161,30 +152,41 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 		return err
 	}
 	modTime := fileInfo.ModTime()
-	deathTime := modTime.Add(lifeTime)
-	if lifeTime > 0 {
-		if deathTime.Before(startTime) {
-			return os.Remove(pastePath)
-		}
-	}
 	size := fileInfo.Size()
 	s.Lock()
 	defer s.Unlock()
 	if !s.stats.hasSpaceFor(size) {
 		return ErrReachedMax
 	}
+	pasteFile, err := os.Open(pastePath)
+	defer pasteFile.Close()
+	mmap, err := getMmap(pasteFile, int(fileInfo.Size()))
+	if err != nil {
+		return err
+	}
 	s.stats.makeSpaceFor(size)
-	lifeLeft := deathTime.Sub(startTime)
-	cached := fileCache{
+	cached := mmapCache{
 		header: genHeader(id, modTime, size),
 		path:   pastePath,
+		mmap:   mmap,
+	}
+	if lifeTime > 0 {
+		deathTime := modTime.Add(lifeTime)
+		if deathTime.Before(startTime) {
+			return os.Remove(pastePath)
+		}
 	}
 	s.cache[id] = cached
-	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 
-func (s *FileStore) setupSubdir(h byte) error {
+func (s *MmapStore) Report() string {
+	s.Lock()
+	defer s.Unlock()
+	return s.stats.Report()
+}
+
+func (s *MmapStore) setupSubdir(h byte) error {
 	dir := hex.EncodeToString([]byte{h})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
@@ -199,8 +201,9 @@ func (s *FileStore) setupSubdir(h byte) error {
 	return nil
 }
 
-func (s *FileStore) Report() string {
-	s.Lock()
-	defer s.Unlock()
-	return s.stats.Report()
+func getMmap(file *os.File, length int) ([]byte, error) {
+	fd := int(file.Fd())
+	prot := syscall.PROT_READ
+	flags := syscall.MAP_SHARED
+	return syscall.Mmap(fd, 0, length, prot, flags)
 }

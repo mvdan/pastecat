@@ -208,6 +208,16 @@ func main() {
 		}
 		log.Printf("Starting up file store in the directory '%s'", pasteDir)
 		store, err = newFileStore(pasteDir)
+	case "mmap":
+		if len(args) > 2 {
+			log.Fatalf("Too many arguments given for %s", storageType)
+		}
+		pasteDir := "pastes"
+		if len(args) > 1 {
+			pasteDir = args[1]
+		}
+		log.Printf("Starting up mmapped file store in the directory '%s'", pasteDir)
+		store, err = newMmapStore(pasteDir)
 	case "mem":
 		if len(args) > 1 {
 			log.Fatalf("Too many arguments given for %s", storageType)
