@@ -139,10 +139,9 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	}
 	modTime := fileInfo.ModTime()
 	deathTime := modTime.Add(lifeTime)
-	if lifeTime > 0 {
-		if deathTime.Before(startTime) {
-			return os.Remove(path)
-		}
+	lifeLeft := deathTime.Sub(startTime)
+	if lifeTime > 0 && lifeLeft <= 0 {
+		return os.Remove(path)
 	}
 	size := fileInfo.Size()
 	s.Lock()
@@ -157,7 +156,6 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		return err
 	}
 	s.stats.makeSpaceFor(size)
-	lifeLeft := deathTime.Sub(startTime)
 	cached := mmapCache{
 		header: genHeader(id, modTime, size),
 		path:   path,
