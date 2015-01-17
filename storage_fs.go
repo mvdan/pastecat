@@ -25,8 +25,32 @@ type FileStore struct {
 }
 
 type fileCache struct {
-	header Header
-	path   string
+	reading sync.WaitGroup
+	header  Header
+	path    string
+}
+
+type FileContent struct {
+	file    *os.File
+	reading *sync.WaitGroup
+}
+
+func (c FileContent) Read(p []byte) (n int, err error) {
+	return c.file.Read(p)
+}
+
+func (c FileContent) ReadAt(p []byte, off int64) (n int, err error) {
+	return c.file.ReadAt(p, off)
+}
+
+func (c FileContent) Seek(offset int64, whence int) (int64, error) {
+	return c.file.Seek(offset, whence)
+}
+
+func (c FileContent) Close() error {
+	err := c.file.Close()
+	c.reading.Done()
+	return err
 }
 
 func newFileStore(dir string) (s *FileStore, err error) {
@@ -58,7 +82,8 @@ func (s *FileStore) Get(id ID) (Content, *Header, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return f, &cached.header, nil
+	cached.reading.Add(1)
+	return FileContent{f, &cached.reading}, &cached.header, nil
 }
 
 func (s *FileStore) Put(content []byte) (id ID, err error) {
@@ -97,10 +122,11 @@ func (s *FileStore) Delete(id ID) error {
 		return ErrPasteNotFound
 	}
 	delete(s.cache, id)
+	s.stats.freeSpace(cached.header.Size)
+	cached.reading.Wait()
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
-	s.stats.freeSpace(cached.header.Size)
 	return nil
 }
 
