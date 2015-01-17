@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -86,6 +87,21 @@ func (s *FileStore) Get(id ID) (Content, *Header, error) {
 	return FileContent{f, &cached.reading}, &cached.header, nil
 }
 
+func writeNewFile(filename string, data []byte) error {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write(data)
+	if err == nil && n < len(data) {
+		err = io.ErrShortWrite
+	}
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	return err
+}
+
 func (s *FileStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
@@ -98,12 +114,7 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	}
 	hexID := id.String()
 	pastePath := path.Join(hexID[:2], hexID[2:])
-	pasteFile, err := os.OpenFile(pastePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return
-	}
-	defer pasteFile.Close()
-	if _, err = pasteFile.Write(content); err != nil {
+	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
 	s.stats.makeSpaceFor(size)
