@@ -66,13 +66,13 @@ func (s *Stats) Report() string {
 	return fmt.Sprintf("Have a total of %s pastes using %s", numberStat, sizeStat)
 }
 
-func genHeader(id ID, modTime time.Time, size int64) (p Header) {
-	p.ModTime = modTime
-	p.Size = size
+func genHeader(id ID, modTime time.Time, size int64) (h Header) {
+	h.ModTime = modTime
+	h.Size = size
 	if lifeTime > 0 {
-		p.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
+		h.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
 	}
-	p.Etag = fmt.Sprintf("%d-%s", p.ModTime.Unix(), id)
+	h.Etag = fmt.Sprintf("%d-%s", h.ModTime.Unix(), id)
 	return
 }
 
