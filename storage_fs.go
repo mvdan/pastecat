@@ -54,12 +54,7 @@ func (c fileContent) Close() error {
 }
 
 func newFileStore(dir string) (s *FileStore, err error) {
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	if err = os.Chdir(dir); err != nil {
-		return nil, err
-	}
+	setupTopDir(dir)
 	s = new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
@@ -150,11 +145,8 @@ func idFromPath(path string) (id ID, err error) {
 }
 
 func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error {
-	if err != nil {
+	if err != nil || fileInfo.IsDir() {
 		return err
-	}
-	if fileInfo.IsDir() {
-		return nil
 	}
 	id, err := idFromPath(path)
 	if err != nil {
@@ -180,6 +172,13 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	s.cache[id] = cached
 	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
+}
+
+func setupTopDir(topdir string) error {
+	if err := os.MkdirAll(topdir, 0700); err != nil {
+		return err
+	}
+	return os.Chdir(topdir)
 }
 
 func setupSubdirs(topdir string, rec func(string, os.FileInfo, error) error) error {

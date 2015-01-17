@@ -49,12 +49,7 @@ func (c mmapContent) Close() error {
 }
 
 func newMmapStore(dir string) (s *MmapStore, err error) {
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	if err = os.Chdir(dir); err != nil {
-		return nil, err
-	}
+	setupTopDir(dir)
 	s = new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
@@ -127,11 +122,8 @@ func (s *MmapStore) Delete(id ID) error {
 }
 
 func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error {
-	if err != nil {
+	if err != nil || fileInfo.IsDir() {
 		return err
-	}
-	if fileInfo.IsDir() {
-		return nil
 	}
 	id, err := idFromPath(path)
 	if err != nil {
