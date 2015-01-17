@@ -4,13 +4,8 @@
 package main
 
 import (
-	"encoding/hex"
-	"errors"
-	"fmt"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -63,11 +58,7 @@ func newMmapStore(dir string) (s *MmapStore, err error) {
 	s = new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
-	for i := 0; i < 256; i++ {
-		if err = s.setupSubdir(byte(i)); err != nil {
-			return nil, err
-		}
-	}
+	setupSubdirs(s.dir, s.Recover)
 	return
 }
 
@@ -135,48 +126,45 @@ func (s *MmapStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *MmapStore) Recover(pastePath string, fileInfo os.FileInfo, err error) error {
+func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
 	if fileInfo.IsDir() {
 		return nil
 	}
-	parts := strings.Split(pastePath, string(filepath.Separator))
-	if len(parts) != 2 {
-		return errors.New("invalid number of directories at " + pastePath)
-	}
-	hexID := parts[0] + parts[1]
-	id, err := IDFromString(hexID)
+	id, err := idFromPath(path)
 	if err != nil {
 		return err
 	}
 	modTime := fileInfo.ModTime()
+	deathTime := modTime.Add(lifeTime)
+	if lifeTime > 0 {
+		if deathTime.Before(startTime) {
+			return os.Remove(path)
+		}
+	}
 	size := fileInfo.Size()
 	s.Lock()
 	defer s.Unlock()
 	if !s.stats.hasSpaceFor(size) {
 		return ErrReachedMax
 	}
-	pasteFile, err := os.Open(pastePath)
+	pasteFile, err := os.Open(path)
 	defer pasteFile.Close()
 	mmap, err := getMmap(pasteFile, int(fileInfo.Size()))
 	if err != nil {
 		return err
 	}
 	s.stats.makeSpaceFor(size)
+	lifeLeft := deathTime.Sub(startTime)
 	cached := mmapCache{
 		header: genHeader(id, modTime, size),
-		path:   pastePath,
+		path:   path,
 		mmap:   mmap,
 	}
-	if lifeTime > 0 {
-		deathTime := modTime.Add(lifeTime)
-		if deathTime.Before(startTime) {
-			return os.Remove(pastePath)
-		}
-	}
 	s.cache[id] = cached
+	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 
@@ -184,21 +172,6 @@ func (s *MmapStore) Report() string {
 	s.Lock()
 	defer s.Unlock()
 	return s.stats.Report()
-}
-
-func (s *MmapStore) setupSubdir(h byte) error {
-	dir := hex.EncodeToString([]byte{h})
-	if stat, err := os.Stat(dir); err == nil {
-		if !stat.IsDir() {
-			return fmt.Errorf("%s/%s exists but is not a directory", s.dir, dir)
-		}
-		if err := filepath.Walk(dir, s.Recover); err != nil {
-			return fmt.Errorf("cannot recover data directory %s/%s: %s", s.dir, dir, err)
-		}
-	} else if err := os.Mkdir(dir, 0700); err != nil {
-		return fmt.Errorf("cannot create data directory %s/%s: %s", s.dir, dir, err)
-	}
-	return nil
 }
 
 func getMmap(file *os.File, length int) ([]byte, error) {

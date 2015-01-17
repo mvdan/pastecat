@@ -63,11 +63,7 @@ func newFileStore(dir string) (s *FileStore, err error) {
 	s = new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	for i := 0; i < 256; i++ {
-		if err = s.setupSubdir(byte(i)); err != nil {
-			return nil, err
-		}
-	}
+	setupSubdirs(s.dir, s.Recover)
 	return
 }
 
@@ -144,19 +140,23 @@ func (s *FileStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) error {
+func idFromPath(path string) (id ID, err error) {
+	parts := strings.Split(path, string(filepath.Separator))
+	if len(parts) != 2 {
+		return id, errors.New("invalid number of directories at " + path)
+	}
+	hexID := parts[0] + parts[1]
+	return IDFromString(hexID)
+}
+
+func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
 	if fileInfo.IsDir() {
 		return nil
 	}
-	parts := strings.Split(pastePath, string(filepath.Separator))
-	if len(parts) != 2 {
-		return errors.New("invalid number of directories at " + pastePath)
-	}
-	hexID := parts[0] + parts[1]
-	id, err := IDFromString(hexID)
+	id, err := idFromPath(path)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 	deathTime := modTime.Add(lifeTime)
 	if lifeTime > 0 {
 		if deathTime.Before(startTime) {
-			return os.Remove(pastePath)
+			return os.Remove(path)
 		}
 	}
 	size := fileInfo.Size()
@@ -177,24 +177,33 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 	lifeLeft := deathTime.Sub(startTime)
 	cached := fileCache{
 		header: genHeader(id, modTime, size),
-		path:   pastePath,
+		path:   path,
 	}
 	s.cache[id] = cached
 	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 
-func (s *FileStore) setupSubdir(h byte) error {
+func setupSubdirs(topdir string, rec func(string, os.FileInfo, error) error) error {
+	for i := 0; i < 256; i++ {
+		if err := setupSubdir(topdir, rec, byte(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setupSubdir(topdir string, rec func(string, os.FileInfo, error) error, h byte) error {
 	dir := hex.EncodeToString([]byte{h})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
-			return fmt.Errorf("%s/%s exists but is not a directory", s.dir, dir)
+			return fmt.Errorf("%s/%s exists but is not a directory", topdir, dir)
 		}
-		if err := filepath.Walk(dir, s.Recover); err != nil {
-			return fmt.Errorf("cannot recover data directory %s/%s: %s", s.dir, dir, err)
+		if err := filepath.Walk(dir, rec); err != nil {
+			return fmt.Errorf("cannot recover data directory %s/%s: %s", topdir, dir, err)
 		}
 	} else if err := os.Mkdir(dir, 0700); err != nil {
-		return fmt.Errorf("cannot create data directory %s/%s: %s", s.dir, dir, err)
+		return fmt.Errorf("cannot create data directory %s/%s: %s", topdir, dir, err)
 	}
 	return nil
 }
