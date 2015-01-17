@@ -60,7 +60,7 @@ Fetch it:
 
 ### What it doesn't do
 
-##### Compression
+##### Storage compression
 
 Should be handled at a lower level. Filesystems like Btrfs already support
 compression.
@@ -83,3 +83,8 @@ Even though you could encrypt pastes with tools like GnuPG, for privacy
 reasons you might want to support HTTPS too.
 
 In such cases, you can run pastecat behind a reverse proxy like Nginx.
+
+##### HTTP compression
+
+Like HTTPS, you can use software like Nginx to add compression on top of
+pastecat.
