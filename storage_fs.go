@@ -30,24 +30,24 @@ type fileCache struct {
 	path    string
 }
 
-type FileContent struct {
+type fileContent struct {
 	file    *os.File
 	reading *sync.WaitGroup
 }
 
-func (c FileContent) Read(p []byte) (n int, err error) {
+func (c fileContent) Read(p []byte) (n int, err error) {
 	return c.file.Read(p)
 }
 
-func (c FileContent) ReadAt(p []byte, off int64) (n int, err error) {
+func (c fileContent) ReadAt(p []byte, off int64) (n int, err error) {
 	return c.file.ReadAt(p, off)
 }
 
-func (c FileContent) Seek(offset int64, whence int) (int64, error) {
+func (c fileContent) Seek(offset int64, whence int) (int64, error) {
 	return c.file.Seek(offset, whence)
 }
 
-func (c FileContent) Close() error {
+func (c fileContent) Close() error {
 	err := c.file.Close()
 	c.reading.Done()
 	return err
@@ -83,7 +83,7 @@ func (s *FileStore) Get(id ID) (Content, *Header, error) {
 		return nil, nil, err
 	}
 	cached.reading.Add(1)
-	return FileContent{f, &cached.reading}, &cached.header, nil
+	return fileContent{f, &cached.reading}, &cached.header, nil
 }
 
 func writeNewFile(filename string, data []byte) error {

@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-type BufferContent struct {
+type bufferContent struct {
 	b []byte
 	i int64
 }
 
-func (c BufferContent) Read(p []byte) (n int, err error) {
+func (c bufferContent) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -27,7 +27,7 @@ func (c BufferContent) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (c BufferContent) ReadAt(p []byte, off int64) (n int, err error) {
+func (c bufferContent) ReadAt(p []byte, off int64) (n int, err error) {
 	if off < 0 {
 		return 0, errors.New("pastecat.BufferedPasteContent.ReadAt: negative offset")
 	}
@@ -41,7 +41,7 @@ func (c BufferContent) ReadAt(p []byte, off int64) (n int, err error) {
 	return
 }
 
-func (c BufferContent) Seek(offset int64, whence int) (i int64, err error) {
+func (c bufferContent) Seek(offset int64, whence int) (i int64, err error) {
 	switch whence {
 	case 0:
 		i = offset
@@ -59,7 +59,7 @@ func (c BufferContent) Seek(offset int64, whence int) (i int64, err error) {
 	return
 }
 
-func (c BufferContent) Close() error {
+func (c bufferContent) Close() error {
 	return nil
 }
 
@@ -88,7 +88,7 @@ func (s *MemStore) Get(id ID) (Content, *Header, error) {
 	if !e {
 		return nil, nil, ErrPasteNotFound
 	}
-	bufferContent := BufferContent{b: stored.content}
+	bufferContent := bufferContent{b: stored.content}
 	return bufferContent, &stored.header, nil
 }
 
