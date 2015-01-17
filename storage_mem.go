@@ -4,7 +4,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"errors"
 	"io"
 	"sync"
@@ -100,7 +99,11 @@ func (s *MemStore) Put(content []byte) (id ID, err error) {
 	if !s.stats.hasSpaceFor(size) {
 		return id, ErrReachedMax
 	}
-	if id, err = s.randomID(); err != nil {
+	available := func(id ID) bool {
+		_, e := s.store[id]
+		return !e
+	}
+	if id, err = randomID(available); err != nil {
 		return
 	}
 	s.stats.makeSpaceFor(size)
@@ -121,18 +124,6 @@ func (s *MemStore) Delete(id ID) error {
 	delete(s.store, id)
 	s.stats.freeSpace(stored.header.Size)
 	return nil
-}
-
-func (s *MemStore) randomID() (id ID, err error) {
-	for try := 0; try < randTries; try++ {
-		if _, err := rand.Read(id[:]); err != nil {
-			continue
-		}
-		if _, e := s.store[id]; !e {
-			return id, nil
-		}
-	}
-	return id, ErrNoUnusedIDFound
 }
 
 func (s *MemStore) Report() string {

@@ -4,7 +4,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -109,7 +108,11 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	if !s.stats.hasSpaceFor(size) {
 		return id, ErrReachedMax
 	}
-	if id, err = s.randomID(); err != nil {
+	available := func(id ID) bool {
+		_, e := s.cache[id]
+		return !e
+	}
+	if id, err = randomID(available); err != nil {
 		return
 	}
 	hexID := id.String()
@@ -179,18 +182,6 @@ func (s *FileStore) Recover(pastePath string, fileInfo os.FileInfo, err error) e
 	s.cache[id] = cached
 	SetupPasteDeletion(s, id, lifeLeft)
 	return nil
-}
-
-func (s *FileStore) randomID() (id ID, err error) {
-	for try := 0; try < randTries; try++ {
-		if _, err := rand.Read(id[:]); err != nil {
-			continue
-		}
-		if _, e := s.cache[id]; !e {
-			return id, nil
-		}
-	}
-	return id, ErrNoUnusedIDFound
 }
 
 func (s *FileStore) setupSubdir(h byte) error {

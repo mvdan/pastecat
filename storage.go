@@ -4,6 +4,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -74,6 +75,18 @@ func genHeader(id ID, modTime time.Time, size int64) (h Header) {
 	}
 	h.Etag = fmt.Sprintf("%d-%s", h.ModTime.Unix(), id)
 	return
+}
+
+func randomID(available func(ID) bool) (id ID, err error) {
+	for try := 0; try < randTries; try++ {
+		if _, err := rand.Read(id[:]); err != nil {
+			continue
+		}
+		if available(id) {
+			return id, nil
+		}
+	}
+	return id, ErrNoUnusedIDFound
 }
 
 func SetupPasteDeletion(store Store, id ID, after time.Duration) {
