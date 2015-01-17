@@ -33,10 +33,7 @@ const (
 	// How long to wait before retrying to delete a file
 	deleteRetry = 2 * time.Minute
 
-	// GET error messages
-	invalidID = "invalid paste id"
-
-	// Common error messages
+	invalidID     = "invalid paste id"
 	unknownAction = "unsupported action"
 )
 
