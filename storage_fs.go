@@ -106,8 +106,7 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	if id, err = randomID(available); err != nil {
 		return
 	}
-	hexID := id.String()
-	pastePath := path.Join(hexID[:2], hexID[2:])
+	pastePath := pathFromId(id)
 	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
@@ -133,6 +132,11 @@ func (s *FileStore) Delete(id ID) error {
 	}
 	s.stats.freeSpace(cached.header.Size)
 	return nil
+}
+
+func pathFromId(id ID) string {
+	hexID := id.String()
+	return path.Join(hexID[:2], hexID[2:])
 }
 
 func idFromPath(path string) (id ID, err error) {
@@ -170,7 +174,7 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		path:   path,
 	}
 	s.cache[id] = cached
-	SetupPasteDeletion(s, id, lifeLeft)
+	setupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 

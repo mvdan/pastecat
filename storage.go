@@ -89,7 +89,7 @@ func randomID(available func(ID) bool) (id ID, err error) {
 	return id, ErrNoUnusedIDFound
 }
 
-func SetupPasteDeletion(store Store, id ID, after time.Duration) {
+func setupPasteDeletion(store Store, id ID, after time.Duration) {
 	if after == 0 {
 		return
 	}

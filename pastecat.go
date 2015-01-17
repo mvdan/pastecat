@@ -171,7 +171,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		SetupPasteDeletion(store, id, lifeTime)
+		setupPasteDeletion(store, id, lifeTime)
 		fmt.Fprintf(w, "%s/%s\n", siteURL, id)
 
 	default:

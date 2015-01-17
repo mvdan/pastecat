@@ -5,7 +5,6 @@ package main
 
 import (
 	"os"
-	"path"
 	"sync"
 	"syscall"
 	"time"
@@ -83,8 +82,7 @@ func (s *MmapStore) Put(content []byte) (id ID, err error) {
 	if id, err = randomID(available); err != nil {
 		return
 	}
-	hexID := id.String()
-	pastePath := path.Join(hexID[:2], hexID[2:])
+	pastePath := pathFromId(id)
 	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
@@ -154,7 +152,7 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		mmap:   mmap,
 	}
 	s.cache[id] = cached
-	SetupPasteDeletion(s, id, lifeLeft)
+	setupPasteDeletion(s, id, lifeLeft)
 	return nil
 }
 
@@ -166,7 +164,5 @@ func (s *MmapStore) Report() string {
 
 func getMmap(file *os.File, length int) ([]byte, error) {
 	fd := int(file.Fd())
-	prot := syscall.PROT_READ
-	flags := syscall.MAP_SHARED
-	return syscall.Mmap(fd, 0, length, prot, flags)
+	return syscall.Mmap(fd, 0, length, syscall.PROT_READ, syscall.MAP_SHARED)
 }
