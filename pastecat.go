@@ -116,7 +116,7 @@ func getContentFromForm(r *http.Request) (content []byte, err error) {
 			return content, nil
 		}
 	}
-	return content, err
+	return nil, err
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
