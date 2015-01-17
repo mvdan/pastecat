@@ -84,8 +84,7 @@ func SetupPasteDeletion(store Store, id ID, after time.Duration) {
 	go func() {
 		for {
 			<-timer.C
-			err := store.Delete(id)
-			if err == nil {
+			if err := store.Delete(id); err == nil {
 				break
 			}
 			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
