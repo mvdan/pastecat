@@ -45,6 +45,8 @@ It will stay in the foreground and periodically print usage stats.
 * **-s** - Maximum size of pastes - *1M*
 * **-M** - Maximum storage size to use at once - *1G*
 
+Any of the options requiring quantities can take a zero value as infinity.
+
 ##### Storage backends
 
 You may specify any of the following storage backends as arguments right after
