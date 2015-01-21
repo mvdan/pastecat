@@ -40,16 +40,23 @@ func (s *Stats) freeSpace(size int64) {
 	s.storage -= size
 }
 
-func (s *Stats) Report() string {
-	numberStat := fmt.Sprintf("%d", s.number)
+func (s *Stats) reportNumber() string {
 	if maxNumber > 0 {
-		numberStat += fmt.Sprintf(" (%.2f%% out of %d)",
+		return fmt.Sprintf("%d (%.2f%% out of %d)", s.number,
 			float64(s.number*100)/float64(maxNumber), maxNumber)
 	}
-	sizeStat := fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
+	return fmt.Sprintf("%d", s.number)
+}
+
+func (s *Stats) reportStorage() string {
 	if maxStorage > 0 {
-		sizeStat += fmt.Sprintf(" (%.2f%% out of %s)",
+		return fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(s.storage),
 			float64(s.storage*100)/float64(maxStorage), maxStorage)
 	}
-	return fmt.Sprintf("Have a total of %s pastes using %s", numberStat, sizeStat)
+	return fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
+}
+
+func (s *Stats) Report() string {
+	return fmt.Sprintf("Have a total of %s pastes using %s",
+		s.reportNumber(), s.reportStorage())
 }
