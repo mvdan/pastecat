@@ -165,6 +165,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		content, err := getContentFromForm(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		id, err := store.Put(content)
 		if err == ErrReachedMaxNumber || err == ErrReachedMaxStorage {
