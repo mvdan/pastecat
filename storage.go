@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	ErrPasteNotFound        = errors.New("paste could not be found")
-	ErrNoUnusedIDFound      = errors.New("gave up trying to find an unused random id")
+	ErrPasteNotFound   = errors.New("paste could not be found")
+	ErrNoUnusedIDFound = errors.New("gave up trying to find an unused random id")
 )
 
 type Store interface {
