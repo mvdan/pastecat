@@ -96,8 +96,8 @@ func (s *MemStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if !s.stats.hasSpaceFor(size) {
-		return id, ErrReachedMax
+	if err = s.stats.hasSpaceFor(size); err != nil {
+		return id, err
 	}
 	available := func(id ID) bool {
 		_, e := s.store[id]

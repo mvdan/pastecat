@@ -162,7 +162,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 		id, err := store.Put(content)
-		if err == ErrReachedMax {
+		if err == ErrReachedMaxNumber || err == ErrReachedMaxStorage {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		} else if err != nil {

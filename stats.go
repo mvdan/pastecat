@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	ErrReachedMax           = errors.New("reached maximum capacity of pastes")
-	ErrReachedMaxRecovering = errors.New("reached maximum capacity of pastes while recovering")
+	ErrReachedMaxNumber  = errors.New("reached maximum number of pastes")
+	ErrReachedMaxStorage = errors.New("reached maximum storage of pastes")
 )
 
 type Stats struct {
@@ -20,14 +20,14 @@ type Stats struct {
 	storage int64
 }
 
-func (s *Stats) hasSpaceFor(size int64) bool {
+func (s *Stats) hasSpaceFor(size int64) error {
 	if maxNumber > 0 && s.number >= maxNumber {
-		return false
+		return ErrReachedMaxNumber
 	}
 	if maxStorage > 0 && s.storage+size > int64(maxStorage) {
-		return false
+		return ErrReachedMaxStorage
 	}
-	return true
+	return nil
 }
 
 func (s *Stats) makeSpaceFor(size int64) {

@@ -95,8 +95,8 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if !s.stats.hasSpaceFor(size) {
-		return id, ErrReachedMax
+	if err = s.stats.hasSpaceFor(size); err != nil {
+		return id, err
 	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
@@ -164,8 +164,8 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	size := fileInfo.Size()
 	s.Lock()
 	defer s.Unlock()
-	if !s.stats.hasSpaceFor(size) {
-		return ErrReachedMax
+	if err := s.stats.hasSpaceFor(size); err != nil {
+		return err
 	}
 	s.stats.makeSpaceFor(size)
 	cached := fileCache{
