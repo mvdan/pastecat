@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -110,17 +111,17 @@ func describeLimits() string {
 }
 
 func getContentFromForm(r *http.Request) (content []byte, err error) {
-	if value := r.FormValue(fieldName); value != "" {
+	if value := r.FormValue(fieldName); len(value) > 0 {
 		return []byte(value), nil
 	}
 	if f, _, err := r.FormFile(fieldName); err == nil {
 		defer f.Close()
 		content, err = ioutil.ReadAll(f)
-		if err == nil {
+		if err == nil && len(content) > 0 {
 			return content, nil
 		}
 	}
-	return nil, err
+	return nil, errors.New("no paste provided")
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
