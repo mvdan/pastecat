@@ -110,7 +110,6 @@ func describeLimits() string {
 }
 
 func getContentFromForm(r *http.Request) (content []byte, err error) {
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 	if value := r.FormValue(fieldName); value != "" {
 		return []byte(value), nil
 	}
@@ -162,6 +161,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "", header.ModTime, content)
 
 	case "POST":
+		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		content, err := getContentFromForm(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
