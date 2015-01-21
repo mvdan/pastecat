@@ -1,7 +1,7 @@
 # pastecat
 
-A very simple and self-hosted pastebin service written in Go. Can use multiple
-storage backends.
+A very simple and self-hosted pastebin service written in Go. Can use a
+variety of storage backends.
 
 Designed to remove pastes after a certain period of time. If using a
 persistent storage backend, pastes will be kept between restarts.
