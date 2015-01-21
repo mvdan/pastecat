@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/hex"
-	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -64,11 +63,11 @@ type ID [idSize / 2]byte
 
 func IDFromString(hexID string) (id ID, err error) {
 	if len(hexID) != idSize {
-		return id, errors.New("invalid id at " + hexID)
+		return id, fmt.Errorf("invalid id at %s", hexID)
 	}
 	b, err := hex.DecodeString(hexID)
 	if err != nil || len(b) != idSize/2 {
-		return id, errors.New("invalid id at " + hexID)
+		return id, fmt.Errorf("invalid id at %s", hexID)
 	}
 	copy(id[:], b)
 	return id, nil

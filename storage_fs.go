@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -142,7 +141,7 @@ func pathFromId(id ID) string {
 func idFromPath(path string) (id ID, err error) {
 	parts := strings.Split(path, string(filepath.Separator))
 	if len(parts) != 2 {
-		return id, errors.New("invalid number of directories at " + path)
+		return id, fmt.Errorf("invalid number of directories at %s", path)
 	}
 	hexID := parts[0] + parts[1]
 	return IDFromString(hexID)
