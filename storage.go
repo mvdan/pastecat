@@ -18,8 +18,13 @@ var (
 )
 
 type Store interface {
+	// Get the content and header of a paste by its ID and an error, if
+	// any.
 	Get(id ID) (Content, *Header, error)
+	// Put a new paste given its content. Will return the ID assigned to
+	// the new paste and an error, if any.
 	Put(content []byte) (ID, error)
+	// Delete an existing paste by its ID. Will return an error, if any.
 	Delete(id ID) error
 	Report() string
 }

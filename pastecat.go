@@ -59,8 +59,11 @@ func init() {
 	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
 
+// Binary representation of an identifier for a paste
 type ID [idSize / 2]byte
 
+// Parse a hexadecimal string into an ID. Return the resulting ID and an
+// error, if any.
 func IDFromString(hexID string) (id ID, err error) {
 	if len(hexID) != idSize {
 		return id, fmt.Errorf("invalid id at %s", hexID)
@@ -77,12 +80,14 @@ func (id ID) String() string {
 	return hex.EncodeToString(id[:])
 }
 
+// Static paste attributes
 type Header struct {
 	Etag, Expires string
 	ModTime       time.Time
 	Size          int64
 }
 
+// Interface for accessing the paste's content
 type Content interface {
 	io.Reader
 	io.ReaderAt
