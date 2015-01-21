@@ -179,6 +179,46 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func setupStore(storageType string, args []string) (store Store, err error) {
+	params, e := map[string]map[string]string {
+		"fs": {
+			"dir": "pastes",
+		},
+		"mmap": {
+			"dir": "pastes",
+		},
+		"mem": {
+		},
+	}[storageType]
+	if !e {
+		return nil, fmt.Errorf("unknown storage type '%s'", storageType)
+	}
+	if len(args) > len(params) {
+		return nil, fmt.Errorf("too many arguments given for %s", storageType)
+	}
+
+	for k := range params {
+		if len(args) == 0 {
+			break
+		}
+		params[k] = args[0]
+		args = args[1:]
+	}
+
+	switch storageType {
+	case "fs":
+		log.Printf("Starting up file store in the directory '%s'", params["dir"])
+		return newFileStore(params["dir"])
+	case "mmap":
+		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
+		return newMmapStore(params["dir"])
+	case "mem":
+		log.Printf("Starting up in-memory store")
+		return newMemStore()
+	}
+	return nil, nil
+}
+
 func main() {
 	var err error
 	flag.Parse()
@@ -192,42 +232,11 @@ func main() {
 	log.Printf("maxStorage = %s", maxStorage)
 
 	args := flag.Args()
-	storageType := "fs"
-	if len(args) > 0 {
-		storageType = args[0]
+	if len(args) == 0 {
+		args = []string{"fs"}
 	}
-	switch storageType {
-	case "fs":
-		if len(args) > 2 {
-			log.Fatalf("Too many arguments given for %s", storageType)
-		}
-		pasteDir := "pastes"
-		if len(args) > 1 {
-			pasteDir = args[1]
-		}
-		log.Printf("Starting up file store in the directory '%s'", pasteDir)
-		store, err = newFileStore(pasteDir)
-	case "mmap":
-		if len(args) > 2 {
-			log.Fatalf("Too many arguments given for %s", storageType)
-		}
-		pasteDir := "pastes"
-		if len(args) > 1 {
-			pasteDir = args[1]
-		}
-		log.Printf("Starting up mmapped file store in the directory '%s'", pasteDir)
-		store, err = newMmapStore(pasteDir)
-	case "mem":
-		if len(args) > 1 {
-			log.Fatalf("Too many arguments given for %s", storageType)
-		}
-		log.Printf("Starting up in-memory store")
-		store, err = newMemStore()
-	default:
-		log.Fatalf("Unknown paste store type '%s'", storageType)
-	}
-	if err != nil {
-		log.Fatalf("Could not start %s paste store: %s", storageType, err)
+	if store, err = setupStore(args[0], args[1:]); err != nil {
+		log.Fatalf("Could not setup paste store: %s", err)
 	}
 
 	ticker := time.NewTicker(statsReport)
