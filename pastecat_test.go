@@ -46,8 +46,8 @@ func TestIDFromString(t *testing.T) {
 func TestIDString(t *testing.T) {
 	var id ID
 	for _, c := range []struct {
-		in      []byte
-		want    string
+		in   []byte
+		want string
 	}{
 		{byteRepeat(0x00), strRepeat("00")},
 		{byteRepeat(0xee), strRepeat("ee")},
