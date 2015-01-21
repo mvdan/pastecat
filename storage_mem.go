@@ -29,7 +29,7 @@ func (c bufferContent) Read(p []byte) (n int, err error) {
 
 func (c bufferContent) ReadAt(p []byte, off int64) (n int, err error) {
 	if off < 0 {
-		return 0, errors.New("pastecat.BufferedPasteContent.ReadAt: negative offset")
+		return 0, errors.New("pastecat.bufferContent.ReadAt: negative offset")
 	}
 	if off >= int64(len(c.b)) {
 		return 0, io.EOF
@@ -50,10 +50,10 @@ func (c bufferContent) Seek(offset int64, whence int) (i int64, err error) {
 	case 2:
 		i = int64(len(c.b)) + offset
 	default:
-		return 0, errors.New("pastecat.BufferedPasteContent.Seek: invalid whence")
+		return 0, errors.New("pastecat.bufferContent.Seek: invalid whence")
 	}
 	if i < 0 {
-		return 0, errors.New("pastecat.BufferedPasteContent.Seek: negative position")
+		return 0, errors.New("pastecat.bufferContent.Seek: negative position")
 	}
 	c.i = i
 	return
