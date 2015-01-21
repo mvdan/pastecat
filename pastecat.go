@@ -180,15 +180,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func setupStore(storageType string, args []string) (store Store, err error) {
-	params, e := map[string]map[string]string {
+	params, e := map[string]map[string]string{
 		"fs": {
 			"dir": "pastes",
 		},
 		"mmap": {
 			"dir": "pastes",
 		},
-		"mem": {
-		},
+		"mem": {},
 	}[storageType]
 	if !e {
 		return nil, fmt.Errorf("unknown storage type '%s'", storageType)
