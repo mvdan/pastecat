@@ -105,7 +105,7 @@ func (s *FileStore) Put(content []byte) (id ID, err error) {
 	if id, err = randomID(available); err != nil {
 		return
 	}
-	pastePath := pathFromId(id)
+	pastePath := pathFromID(id)
 	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
@@ -133,7 +133,7 @@ func (s *FileStore) Delete(id ID) error {
 	return nil
 }
 
-func pathFromId(id ID) string {
+func pathFromID(id ID) string {
 	hexID := id.String()
 	return path.Join(hexID[:2], hexID[2:])
 }

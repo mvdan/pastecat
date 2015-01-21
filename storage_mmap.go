@@ -82,7 +82,7 @@ func (s *MmapStore) Put(content []byte) (id ID, err error) {
 	if id, err = randomID(available); err != nil {
 		return
 	}
-	pastePath := pathFromId(id)
+	pastePath := pathFromID(id)
 	if err = writeNewFile(pastePath, content); err != nil {
 		return
 	}
