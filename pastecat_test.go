@@ -16,7 +16,7 @@ func byteRepeat(b byte) []byte {
 }
 
 func TestIDFromString(t *testing.T) {
-	for _, c := range []struct {
+	for _, c := range [...]struct {
 		in      string
 		want    []byte
 		wantErr bool
