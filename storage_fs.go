@@ -162,6 +162,9 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		return os.Remove(path)
 	}
 	size := fileInfo.Size()
+	if size == 0 {
+		return os.Remove(path)
+	}
 	s.Lock()
 	defer s.Unlock()
 	if err := s.stats.hasSpaceFor(size); err != nil {
