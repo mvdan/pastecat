@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"sync"
 	"syscall"
@@ -27,7 +28,7 @@ type mmapCache struct {
 }
 
 type MmapPaste struct {
-	content bufferContent
+	content *bytes.Reader
 	cache   *mmapCache
 }
 
@@ -76,9 +77,9 @@ func (s *MmapStore) Get(id ID) (Paste, error) {
 	if !e {
 		return nil, ErrPasteNotFound
 	}
-	content := bufferContent{b: cached.mmap}
+	reader := bytes.NewReader(cached.mmap)
 	cached.reading.Add(1)
-	return MmapPaste{content: content, cache: &cached}, nil
+	return MmapPaste{content: reader, cache: &cached}, nil
 }
 
 func (s *MmapStore) Put(content []byte) (ID, error) {

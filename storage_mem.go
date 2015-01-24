@@ -4,60 +4,10 @@
 package main
 
 import (
-	"errors"
-	"io"
+	"bytes"
 	"sync"
 	"time"
 )
-
-type bufferContent struct {
-	b []byte
-	i int64
-}
-
-func (c bufferContent) Read(p []byte) (n int, err error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	if c.i >= int64(len(c.b)) {
-		return 0, io.EOF
-	}
-	n = copy(p, c.b[c.i:])
-	c.i += int64(n)
-	return
-}
-
-func (c bufferContent) ReadAt(p []byte, off int64) (n int, err error) {
-	if off < 0 {
-		return 0, errors.New("pastecat.bufferContent.ReadAt: negative offset")
-	}
-	if off >= int64(len(c.b)) {
-		return 0, io.EOF
-	}
-	n = copy(p, c.b[off:])
-	if n < len(p) {
-		err = io.EOF
-	}
-	return
-}
-
-func (c bufferContent) Seek(offset int64, whence int) (i int64, err error) {
-	switch whence {
-	case 0:
-		i = offset
-	case 1:
-		i = c.i + offset
-	case 2:
-		i = int64(len(c.b)) + offset
-	default:
-		return 0, errors.New("pastecat.bufferContent.Seek: invalid whence")
-	}
-	if i < 0 {
-		return 0, errors.New("pastecat.bufferContent.Seek: negative position")
-	}
-	c.i = i
-	return
-}
 
 type MemStore struct {
 	sync.RWMutex
@@ -73,7 +23,7 @@ type memCache struct {
 }
 
 type MemPaste struct {
-	content bufferContent
+	content *bytes.Reader
 	cache   *memCache
 }
 
@@ -114,8 +64,8 @@ func (s *MemStore) Get(id ID) (Paste, error) {
 	if !e {
 		return nil, ErrPasteNotFound
 	}
-	content := bufferContent{b: cached.buffer}
-	return MemPaste{content: content, cache: &cached}, nil
+	reader := bytes.NewReader(cached.buffer)
+	return MemPaste{content: reader, cache: &cached}, nil
 }
 
 func (s *MemStore) Put(content []byte) (ID, error) {
