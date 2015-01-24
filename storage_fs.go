@@ -159,6 +159,9 @@ func idFromPath(path string) (ID, error) {
 	if len(parts) != 2 {
 		return ID{}, fmt.Errorf("invalid number of directories at %s", path)
 	}
+	if len(parts[0]) != 2 {
+		return ID{}, fmt.Errorf("invalid directory name length at %s", path)
+	}
 	hexID := parts[0] + parts[1]
 	return IDFromString(hexID)
 }
