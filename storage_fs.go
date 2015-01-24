@@ -52,13 +52,13 @@ func (c fileContent) Close() error {
 	return err
 }
 
-func newFileStore(dir string) (s *FileStore, err error) {
+func newFileStore(dir string) (*FileStore, error) {
 	setupTopDir(dir)
-	s = new(FileStore)
+	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
 	setupSubdirs(s.dir, s.Recover)
-	return
+	return s, nil
 }
 
 func (s *FileStore) Get(id ID) (Content, *Header, error) {
@@ -91,23 +91,24 @@ func writeNewFile(filename string, data []byte) error {
 	return err
 }
 
-func (s *FileStore) Put(content []byte) (id ID, err error) {
+func (s *FileStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err = s.stats.hasSpaceFor(size); err != nil {
-		return id, err
+	if err := s.stats.hasSpaceFor(size); err != nil {
+		return ID{}, err
 	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
 	}
-	if id, err = randomID(available); err != nil {
-		return
+	id, err := randomID(available)
+	if err != nil {
+		return id, err
 	}
 	pastePath := pathFromID(id)
 	if err = writeNewFile(pastePath, content); err != nil {
-		return
+		return id, err
 	}
 	s.stats.makeSpaceFor(size)
 	s.cache[id] = fileCache{
@@ -138,10 +139,10 @@ func pathFromID(id ID) string {
 	return path.Join(hexID[:2], hexID[2:])
 }
 
-func idFromPath(path string) (id ID, err error) {
+func idFromPath(path string) (ID, error) {
 	parts := strings.Split(path, string(filepath.Separator))
 	if len(parts) != 2 {
-		return id, fmt.Errorf("invalid number of directories at %s", path)
+		return ID{}, fmt.Errorf("invalid number of directories at %s", path)
 	}
 	hexID := parts[0] + parts[1]
 	return IDFromString(hexID)

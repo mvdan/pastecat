@@ -110,13 +110,13 @@ func describeLimits() string {
 	return ""
 }
 
-func getContentFromForm(r *http.Request) (content []byte, err error) {
+func getContentFromForm(r *http.Request) ([]byte, error) {
 	if value := r.FormValue(fieldName); len(value) > 0 {
 		return []byte(value), nil
 	}
 	if f, _, err := r.FormFile(fieldName); err == nil {
 		defer f.Close()
-		content, err = ioutil.ReadAll(f)
+		content, err := ioutil.ReadAll(f)
 		if err == nil && len(content) > 0 {
 			return content, nil
 		}
@@ -186,7 +186,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func setupStore(storageType string, args []string) (store Store, err error) {
+func setupStore(storageType string, args []string) (Store, error) {
 	params, e := map[string]map[string]string{
 		"fs": {
 			"dir": "pastes",

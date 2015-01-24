@@ -92,19 +92,20 @@ func (s *MemStore) Get(id ID) (Content, *Header, error) {
 	return bufferContent, &stored.header, nil
 }
 
-func (s *MemStore) Put(content []byte) (id ID, err error) {
+func (s *MemStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err = s.stats.hasSpaceFor(size); err != nil {
-		return id, err
+	if err := s.stats.hasSpaceFor(size); err != nil {
+		return ID{}, err
 	}
 	available := func(id ID) bool {
 		_, e := s.store[id]
 		return !e
 	}
-	if id, err = randomID(available); err != nil {
-		return
+	id, err := randomID(available)
+	if err != nil {
+		return id, err
 	}
 	s.stats.makeSpaceFor(size)
 	s.store[id] = memCache{

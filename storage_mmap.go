@@ -47,13 +47,13 @@ func (c mmapContent) Close() error {
 	return nil
 }
 
-func newMmapStore(dir string) (s *MmapStore, err error) {
+func newMmapStore(dir string) (*MmapStore, error) {
 	setupTopDir(dir)
-	s = new(MmapStore)
+	s := new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
 	setupSubdirs(s.dir, s.Recover)
-	return
+	return s, nil
 }
 
 func (s *MmapStore) Get(id ID) (Content, *Header, error) {
@@ -68,28 +68,29 @@ func (s *MmapStore) Get(id ID) (Content, *Header, error) {
 	return mmapContent{content, &cached.reading}, &cached.header, nil
 }
 
-func (s *MmapStore) Put(content []byte) (id ID, err error) {
+func (s *MmapStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err = s.stats.hasSpaceFor(size); err != nil {
-		return id, err
+	if err := s.stats.hasSpaceFor(size); err != nil {
+		return ID{}, err
 	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
 	}
-	if id, err = randomID(available); err != nil {
-		return
+	id, err := randomID(available)
+	if err != nil {
+		return id, err
 	}
 	pastePath := pathFromID(id)
 	if err = writeNewFile(pastePath, content); err != nil {
-		return
+		return id, err
 	}
 	f, err := os.Open(pastePath)
 	data, err := getMmap(f, len(content))
 	if err != nil {
-		return
+		return id, err
 	}
 	s.stats.makeSpaceFor(size)
 	s.cache[id] = mmapCache{
