@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -81,21 +80,6 @@ func (id ID) String() string {
 	return hex.EncodeToString(id[:])
 }
 
-// Static paste attributes
-type Header struct {
-	Etag, Expires string
-	ModTime       time.Time
-	Size          int64
-}
-
-// Interface for accessing the paste's content
-type Content interface {
-	io.Reader
-	io.ReaderAt
-	io.Seeker
-	io.Closer
-}
-
 func describeLimits() string {
 	var limits []string
 	if maxSize > 0 {
@@ -124,6 +108,15 @@ func getContentFromForm(r *http.Request) ([]byte, error) {
 	return nil, errors.New("no paste provided")
 }
 
+func setHeaders(header http.Header, id ID, paste Paste) {
+	modTime := paste.ModTime()
+	header.Set("Etag", fmt.Sprintf("%d-%s", modTime.Unix(), id))
+	if lifeTime > 0 {
+		header.Set("Expires", modTime.Add(lifeTime).UTC().Format(http.TimeFormat))
+	}
+	header.Set("Content-Type", contentType)
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -144,7 +137,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invalidID, http.StatusBadRequest)
 			return
 		}
-		content, header, err := store.Get(id)
+		paste, err := store.Get(id)
 		if err == ErrPasteNotFound {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -153,13 +146,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer content.Close()
-		w.Header().Set("Etag", header.Etag)
-		if lifeTime > 0 {
-			w.Header().Set("Expires", header.Expires)
-		}
-		w.Header().Set("Content-Type", contentType)
-		http.ServeContent(w, r, "", header.ModTime, content)
+		defer paste.Close()
+		setHeaders(w.Header(), id, paste)
+		http.ServeContent(w, r, "", paste.ModTime(), paste)
 
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))

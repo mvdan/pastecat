@@ -20,31 +20,40 @@ type MmapStore struct {
 
 type mmapCache struct {
 	reading sync.WaitGroup
-	header  Header
+	modTime time.Time
 	path    string
 	mmap    []byte
+	size    int64
 }
 
-type mmapContent struct {
+type MmapPaste struct {
 	content bufferContent
-	reading *sync.WaitGroup
+	cache   *mmapCache
 }
 
-func (c mmapContent) Read(p []byte) (n int, err error) {
+func (c MmapPaste) Read(p []byte) (n int, err error) {
 	return c.content.Read(p)
 }
 
-func (c mmapContent) ReadAt(p []byte, off int64) (n int, err error) {
+func (c MmapPaste) ReadAt(p []byte, off int64) (n int, err error) {
 	return c.content.ReadAt(p, off)
 }
 
-func (c mmapContent) Seek(offset int64, whence int) (int64, error) {
+func (c MmapPaste) Seek(offset int64, whence int) (int64, error) {
 	return c.content.Seek(offset, whence)
 }
 
-func (c mmapContent) Close() error {
-	c.reading.Done()
+func (c MmapPaste) Close() error {
+	c.cache.reading.Done()
 	return nil
+}
+
+func (c MmapPaste) ModTime() time.Time {
+	return c.cache.modTime
+}
+
+func (c MmapPaste) Size() int64 {
+	return c.cache.size
 }
 
 func newMmapStore(dir string) (*MmapStore, error) {
@@ -60,16 +69,16 @@ func newMmapStore(dir string) (*MmapStore, error) {
 	return s, nil
 }
 
-func (s *MmapStore) Get(id ID) (Content, *Header, error) {
+func (s *MmapStore) Get(id ID) (Paste, error) {
 	s.RLock()
 	defer s.RUnlock()
 	cached, e := s.cache[id]
 	if !e {
-		return nil, nil, ErrPasteNotFound
+		return nil, ErrPasteNotFound
 	}
 	content := bufferContent{b: cached.mmap}
 	cached.reading.Add(1)
-	return mmapContent{content, &cached.reading}, &cached.header, nil
+	return MmapPaste{content: content, cache: &cached}, nil
 }
 
 func (s *MmapStore) Put(content []byte) (ID, error) {
@@ -98,9 +107,10 @@ func (s *MmapStore) Put(content []byte) (ID, error) {
 	}
 	s.stats.makeSpaceFor(size)
 	s.cache[id] = mmapCache{
-		header: genHeader(id, time.Now(), size),
-		path:   pastePath,
-		mmap:   data,
+		path:    pastePath,
+		modTime: time.Now(),
+		size:    size,
+		mmap:    data,
 	}
 	return id, nil
 }
@@ -120,7 +130,7 @@ func (s *MmapStore) Delete(id ID) error {
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
-	s.stats.freeSpace(cached.header.Size)
+	s.stats.freeSpace(cached.size)
 	return nil
 }
 
@@ -155,9 +165,10 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	}
 	s.stats.makeSpaceFor(size)
 	cached := mmapCache{
-		header: genHeader(id, modTime, size),
-		path:   path,
-		mmap:   mmap,
+		modTime: modTime,
+		path:    path,
+		mmap:    mmap,
+		size:    size,
 	}
 	s.cache[id] = cached
 	setupPasteDeletion(s, id, lifeLeft)

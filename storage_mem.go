@@ -59,37 +59,63 @@ func (c bufferContent) Seek(offset int64, whence int) (i int64, err error) {
 	return
 }
 
-func (c bufferContent) Close() error {
-	return nil
-}
-
 type MemStore struct {
 	sync.RWMutex
-	store map[ID]memCache
+	cache map[ID]memCache
 
 	stats Stats
 }
 
 type memCache struct {
-	header  Header
-	content []byte
+	buffer  []byte
+	modTime time.Time
+	size    int64
+}
+
+type MemPaste struct {
+	content bufferContent
+	cache   *memCache
+}
+
+func (ps MemPaste) Read(p []byte) (n int, err error) {
+	return ps.content.Read(p)
+}
+
+func (ps MemPaste) ReadAt(p []byte, off int64) (n int, err error) {
+	return ps.content.ReadAt(p, off)
+}
+
+func (ps MemPaste) Seek(offset int64, whence int) (i int64, err error) {
+	return ps.content.Seek(offset, whence)
+}
+
+func (ps MemPaste) Close() error {
+	return nil
+}
+
+func (ps MemPaste) ModTime() time.Time {
+	return ps.cache.modTime
+}
+
+func (ps MemPaste) Size() int64 {
+	return ps.cache.size
 }
 
 func newMemStore() (s *MemStore, err error) {
 	s = new(MemStore)
-	s.store = make(map[ID]memCache)
+	s.cache = make(map[ID]memCache)
 	return
 }
 
-func (s *MemStore) Get(id ID) (Content, *Header, error) {
+func (s *MemStore) Get(id ID) (Paste, error) {
 	s.RLock()
 	defer s.RUnlock()
-	stored, e := s.store[id]
+	cached, e := s.cache[id]
 	if !e {
-		return nil, nil, ErrPasteNotFound
+		return nil, ErrPasteNotFound
 	}
-	bufferContent := bufferContent{b: stored.content}
-	return bufferContent, &stored.header, nil
+	content := bufferContent{b: cached.buffer}
+	return MemPaste{content: content, cache: &cached}, nil
 }
 
 func (s *MemStore) Put(content []byte) (ID, error) {
@@ -100,7 +126,7 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 		return ID{}, err
 	}
 	available := func(id ID) bool {
-		_, e := s.store[id]
+		_, e := s.cache[id]
 		return !e
 	}
 	id, err := randomID(available)
@@ -108,9 +134,10 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 		return id, err
 	}
 	s.stats.makeSpaceFor(size)
-	s.store[id] = memCache{
-		header:  genHeader(id, time.Now(), size),
-		content: content,
+	s.cache[id] = memCache{
+		buffer:  content,
+		modTime: time.Now(),
+		size:    size,
 	}
 	return id, nil
 }
@@ -118,12 +145,12 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 func (s *MemStore) Delete(id ID) error {
 	s.Lock()
 	defer s.Unlock()
-	stored, e := s.store[id]
+	cached, e := s.cache[id]
 	if !e {
 		return ErrPasteNotFound
 	}
-	delete(s.store, id)
-	s.stats.freeSpace(stored.header.Size)
+	delete(s.cache, id)
+	s.stats.freeSpace(cached.size)
 	return nil
 }
 

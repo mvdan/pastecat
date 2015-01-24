@@ -6,9 +6,8 @@ package main
 import (
 	"crypto/rand"
 	"errors"
-	"fmt"
+	"io"
 	"log"
-	"net/http"
 	"time"
 )
 
@@ -17,26 +16,26 @@ var (
 	ErrNoUnusedIDFound = errors.New("gave up trying to find an unused random id")
 )
 
+// Interface for accessing paste content and information
+type Paste interface {
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Closer
+	ModTime() time.Time
+	Size() int64
+}
+
 type Store interface {
 	// Get the content and header of a paste by its ID and an error, if
 	// any.
-	Get(id ID) (Content, *Header, error)
+	Get(id ID) (Paste, error)
 	// Put a new paste given its content. Will return the ID assigned to
 	// the new paste and an error, if any.
 	Put(content []byte) (ID, error)
 	// Delete an existing paste by its ID. Will return an error, if any.
 	Delete(id ID) error
 	Report() string
-}
-
-func genHeader(id ID, modTime time.Time, size int64) (h Header) {
-	h.ModTime = modTime
-	h.Size = size
-	if lifeTime > 0 {
-		h.Expires = modTime.Add(lifeTime).UTC().Format(http.TimeFormat)
-	}
-	h.Etag = fmt.Sprintf("%d-%s", h.ModTime.Unix(), id)
-	return
 }
 
 func randomID(available func(ID) bool) (id ID, err error) {

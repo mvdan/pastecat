@@ -23,33 +23,43 @@ type FileStore struct {
 	stats Stats
 }
 
+// Contains static info
 type fileCache struct {
-	reading sync.WaitGroup
-	header  Header
 	path    string
+	modTime time.Time
+	size    int64
+	reading sync.WaitGroup
 }
 
-type fileContent struct {
-	file    *os.File
-	reading *sync.WaitGroup
+type FilePaste struct {
+	file  *os.File
+	cache *fileCache
 }
 
-func (c fileContent) Read(p []byte) (n int, err error) {
+func (c FilePaste) Read(p []byte) (n int, err error) {
 	return c.file.Read(p)
 }
 
-func (c fileContent) ReadAt(p []byte, off int64) (n int, err error) {
+func (c FilePaste) ReadAt(p []byte, off int64) (n int, err error) {
 	return c.file.ReadAt(p, off)
 }
 
-func (c fileContent) Seek(offset int64, whence int) (int64, error) {
+func (c FilePaste) Seek(offset int64, whence int) (int64, error) {
 	return c.file.Seek(offset, whence)
 }
 
-func (c fileContent) Close() error {
+func (c FilePaste) Close() error {
 	err := c.file.Close()
-	c.reading.Done()
+	c.cache.reading.Done()
 	return err
+}
+
+func (c FilePaste) ModTime() time.Time {
+	return c.cache.modTime
+}
+
+func (c FilePaste) Size() int64 {
+	return c.cache.size
 }
 
 func newFileStore(dir string) (*FileStore, error) {
@@ -65,19 +75,19 @@ func newFileStore(dir string) (*FileStore, error) {
 	return s, nil
 }
 
-func (s *FileStore) Get(id ID) (Content, *Header, error) {
+func (s *FileStore) Get(id ID) (Paste, error) {
 	s.RLock()
 	defer s.RUnlock()
 	cached, e := s.cache[id]
 	if !e {
-		return nil, nil, ErrPasteNotFound
+		return nil, ErrPasteNotFound
 	}
 	f, err := os.Open(cached.path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	cached.reading.Add(1)
-	return fileContent{f, &cached.reading}, &cached.header, nil
+	return FilePaste{file: f, cache: &cached}, nil
 }
 
 func writeNewFile(filename string, data []byte) error {
@@ -116,8 +126,9 @@ func (s *FileStore) Put(content []byte) (ID, error) {
 	}
 	s.stats.makeSpaceFor(size)
 	s.cache[id] = fileCache{
-		header: genHeader(id, time.Now(), size),
-		path:   pastePath,
+		path:    pastePath,
+		size:    size,
+		modTime: time.Now(),
 	}
 	return id, nil
 }
@@ -134,7 +145,7 @@ func (s *FileStore) Delete(id ID) error {
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
-	s.stats.freeSpace(cached.header.Size)
+	s.stats.freeSpace(cached.size)
 	return nil
 }
 
@@ -177,8 +188,9 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	}
 	s.stats.makeSpaceFor(size)
 	cached := fileCache{
-		header: genHeader(id, modTime, size),
-		path:   path,
+		path:    path,
+		size:    size,
+		modTime: modTime,
 	}
 	s.cache[id] = cached
 	setupPasteDeletion(s, id, lifeLeft)
