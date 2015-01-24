@@ -112,7 +112,11 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 	modTime := paste.ModTime()
 	header.Set("Etag", fmt.Sprintf("%d-%s", modTime.Unix(), id))
 	if lifeTime > 0 {
-		header.Set("Expires", modTime.Add(lifeTime).UTC().Format(http.TimeFormat))
+		deathTime := modTime.Add(lifeTime)
+		lifeLeft := deathTime.Sub(time.Now())
+		header.Set("Expires", deathTime.UTC().Format(http.TimeFormat))
+		header.Set("Cache-Control", fmt.Sprintf(
+			"max-age=%.f, must-revalidate", lifeLeft.Seconds()))
 	}
 	header.Set("Content-Type", contentType)
 }
