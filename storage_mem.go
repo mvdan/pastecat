@@ -51,7 +51,7 @@ func (ps MemPaste) Size() int64 {
 	return ps.cache.size
 }
 
-func newMemStore() (s *MemStore, err error) {
+func NewMemStore() (s *MemStore, err error) {
 	s = new(MemStore)
 	s.cache = make(map[ID]memCache)
 	return

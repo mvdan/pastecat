@@ -57,7 +57,7 @@ func (c MmapPaste) Size() int64 {
 	return c.cache.size
 }
 
-func newMmapStore(dir string) (*MmapStore, error) {
+func NewMmapStore(dir string) (*MmapStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}

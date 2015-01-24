@@ -62,7 +62,7 @@ func (c FilePaste) Size() int64 {
 	return c.cache.size
 }
 
-func newFileStore(dir string) (*FileStore, error) {
+func NewFileStore(dir string) (*FileStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}

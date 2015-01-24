@@ -203,13 +203,13 @@ func setupStore(storageType string, args []string) (Store, error) {
 	switch storageType {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
-		return newFileStore(params["dir"])
+		return NewFileStore(params["dir"])
 	case "mmap":
 		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
-		return newMmapStore(params["dir"])
+		return NewMmapStore(params["dir"])
 	case "mem":
 		log.Printf("Starting up in-memory store")
-		return newMemStore()
+		return NewMemStore()
 	}
 	return nil, nil
 }
