@@ -23,7 +23,6 @@ type FileStore struct {
 	stats Stats
 }
 
-// Contains static info
 type fileCache struct {
 	path    string
 	modTime time.Time

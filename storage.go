@@ -27,14 +27,17 @@ type Paste interface {
 }
 
 type Store interface {
-	// Get the content and header of a paste by its ID and an error, if
-	// any.
+	// Get the paste known by the given ID and an error, if any.
 	Get(id ID) (Paste, error)
+
 	// Put a new paste given its content. Will return the ID assigned to
 	// the new paste and an error, if any.
 	Put(content []byte) (ID, error)
+
 	// Delete an existing paste by its ID. Will return an error, if any.
 	Delete(id ID) error
+
+	// Reports current usage stats
 	Report() string
 }
 

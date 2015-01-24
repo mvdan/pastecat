@@ -195,7 +195,6 @@ func setupStore(storageType string, args []string) (Store, error) {
 	if len(args) > len(params) {
 		return nil, fmt.Errorf("too many arguments given for %s", storageType)
 	}
-
 	for k := range params {
 		if len(args) == 0 {
 			break
@@ -203,7 +202,6 @@ func setupStore(storageType string, args []string) (Store, error) {
 		params[k] = args[0]
 		args = args[1:]
 	}
-
 	switch storageType {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
