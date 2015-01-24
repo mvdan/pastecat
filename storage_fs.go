@@ -53,11 +53,15 @@ func (c fileContent) Close() error {
 }
 
 func newFileStore(dir string) (*FileStore, error) {
-	setupTopDir(dir)
+	if err := setupTopDir(dir); err != nil {
+		return nil, err
+	}
 	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	setupSubdirs(s.dir, s.Recover)
+	if err := setupSubdirs(s.dir, s.Recover); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
