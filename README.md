@@ -34,8 +34,6 @@ Fetch it:
 
 	$ pastecat -u http://my.site -l :80
 
-It will stay in the foreground and periodically print usage stats.
-
 ##### Options
 
 * **-u** - URL of the site - *http://localhost:8080*
@@ -49,9 +47,6 @@ Any of the options requiring quantities can take a zero value as infinity.
 
 ##### Storage backends
 
-You may specify any of the following storage backends as arguments right after
-the options.
-
 Persistent:
 
 * **fs** *[directory]* - filesystem structure *(default)*
@@ -60,6 +55,8 @@ Persistent:
 Non-persistent:
 
 * **mem** - standard in-memory map
+
+Note that options must go first.
 
 ### What it doesn't do
 
