@@ -18,9 +18,7 @@ import (
 type FileStore struct {
 	sync.RWMutex
 	cache map[ID]fileCache
-
 	dir   string
-	stats Stats
 }
 
 type fileCache struct {
@@ -108,9 +106,6 @@ func (s *FileStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err := s.stats.hasSpaceFor(size); err != nil {
-		return ID{}, err
-	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
@@ -123,7 +118,6 @@ func (s *FileStore) Put(content []byte) (ID, error) {
 	if err = writeNewFile(pastePath, content); err != nil {
 		return id, err
 	}
-	s.stats.makeSpaceFor(size)
 	s.cache[id] = fileCache{
 		path:    pastePath,
 		size:    size,
@@ -144,7 +138,6 @@ func (s *FileStore) Delete(id ID) error {
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
-	s.stats.freeSpace(cached.size)
 	return nil
 }
 
@@ -185,17 +178,13 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	}
 	s.Lock()
 	defer s.Unlock()
-	if err := s.stats.hasSpaceFor(size); err != nil {
-		return err
-	}
-	s.stats.makeSpaceFor(size)
 	cached := fileCache{
 		path:    path,
 		size:    size,
 		modTime: modTime,
 	}
 	s.cache[id] = cached
-	setupPasteDeletion(s, id, lifeLeft)
+	setupPasteDeletion(id, size, lifeLeft)
 	return nil
 }
 
@@ -228,10 +217,4 @@ func setupSubdir(topdir string, rec func(string, os.FileInfo, error) error, h by
 		return fmt.Errorf("cannot create data directory %s/%s: %s", topdir, dir, err)
 	}
 	return nil
-}
-
-func (s *FileStore) Report() string {
-	s.Lock()
-	defer s.Unlock()
-	return s.stats.Report()
 }

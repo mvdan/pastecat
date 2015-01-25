@@ -14,9 +14,7 @@ import (
 type MmapStore struct {
 	sync.RWMutex
 	cache map[ID]mmapCache
-
 	dir   string
-	stats Stats
 }
 
 type mmapCache struct {
@@ -86,9 +84,6 @@ func (s *MmapStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err := s.stats.hasSpaceFor(size); err != nil {
-		return ID{}, err
-	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
@@ -106,7 +101,6 @@ func (s *MmapStore) Put(content []byte) (ID, error) {
 	if err != nil {
 		return id, err
 	}
-	s.stats.makeSpaceFor(size)
 	s.cache[id] = mmapCache{
 		path:    pastePath,
 		modTime: time.Now(),
@@ -131,7 +125,6 @@ func (s *MmapStore) Delete(id ID) error {
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
-	s.stats.freeSpace(cached.size)
 	return nil
 }
 
@@ -155,16 +148,12 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	}
 	s.Lock()
 	defer s.Unlock()
-	if err := s.stats.hasSpaceFor(size); err != nil {
-		return err
-	}
 	pasteFile, err := os.Open(path)
 	defer pasteFile.Close()
 	mmap, err := getMmap(pasteFile, int(fileInfo.Size()))
 	if err != nil {
 		return err
 	}
-	s.stats.makeSpaceFor(size)
 	cached := mmapCache{
 		modTime: modTime,
 		path:    path,
@@ -172,14 +161,8 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		size:    size,
 	}
 	s.cache[id] = cached
-	setupPasteDeletion(s, id, lifeLeft)
+	setupPasteDeletion(id, size, lifeLeft)
 	return nil
-}
-
-func (s *MmapStore) Report() string {
-	s.Lock()
-	defer s.Unlock()
-	return s.stats.Report()
 }
 
 func getMmap(file *os.File, length int) ([]byte, error) {

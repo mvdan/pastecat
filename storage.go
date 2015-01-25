@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"log"
 	"time"
 )
 
@@ -36,9 +35,6 @@ type Store interface {
 
 	// Delete an existing paste by its ID. Will return an error, if any.
 	Delete(id ID) error
-
-	// Reports current usage stats
-	Report() string
 }
 
 func randomID(available func(ID) bool) (id ID, err error) {
@@ -51,21 +47,4 @@ func randomID(available func(ID) bool) (id ID, err error) {
 		}
 	}
 	return id, ErrNoUnusedIDFound
-}
-
-func setupPasteDeletion(store Store, id ID, after time.Duration) {
-	if after == 0 {
-		return
-	}
-	timer := time.NewTimer(after)
-	go func() {
-		for {
-			<-timer.C
-			if err := store.Delete(id); err == nil {
-				break
-			}
-			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
-			timer.Reset(deleteRetry)
-		}
-	}()
 }

@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/mvdan/bytesize"
 )
@@ -18,26 +19,28 @@ var (
 type Stats struct {
 	number  int
 	storage int64
+	sync.RWMutex
 }
 
-func (s *Stats) hasSpaceFor(size int64) error {
+func (s *Stats) makeSpaceFor(size int64) error {
+	s.Lock()
+	defer s.Unlock()
 	if maxNumber > 0 && s.number >= maxNumber {
 		return ErrReachedMaxNumber
 	}
 	if maxStorage > 0 && s.storage+size > int64(maxStorage) {
 		return ErrReachedMaxStorage
 	}
+	s.number++
+	s.storage += size
 	return nil
 }
 
-func (s *Stats) makeSpaceFor(size int64) {
-	s.number++
-	s.storage += size
-}
-
 func (s *Stats) freeSpace(size int64) {
+	s.Lock()
 	s.number--
 	s.storage -= size
+	s.Unlock()
 }
 
 func (s *Stats) reportNumber() string {
@@ -57,6 +60,9 @@ func (s *Stats) reportStorage() string {
 }
 
 func (s *Stats) Report() string {
-	return fmt.Sprintf("Have a total of %s pastes using %s",
-		s.reportNumber(), s.reportStorage())
+	s.RLock()
+	number := s.reportNumber()
+	storage := s.reportStorage()
+	s.RUnlock()
+	return fmt.Sprintf("Have a total of %s pastes using %s", number, storage)
 }

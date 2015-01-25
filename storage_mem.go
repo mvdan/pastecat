@@ -12,8 +12,6 @@ import (
 type MemStore struct {
 	sync.RWMutex
 	cache map[ID]memCache
-
-	stats Stats
 }
 
 type memCache struct {
@@ -72,9 +70,6 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
 	size := int64(len(content))
-	if err := s.stats.hasSpaceFor(size); err != nil {
-		return ID{}, err
-	}
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
@@ -83,7 +78,6 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 	if err != nil {
 		return id, err
 	}
-	s.stats.makeSpaceFor(size)
 	s.cache[id] = memCache{
 		buffer:  content,
 		modTime: time.Now(),
@@ -95,17 +89,10 @@ func (s *MemStore) Put(content []byte) (ID, error) {
 func (s *MemStore) Delete(id ID) error {
 	s.Lock()
 	defer s.Unlock()
-	cached, e := s.cache[id]
+	_, e := s.cache[id]
 	if !e {
 		return ErrPasteNotFound
 	}
 	delete(s.cache, id)
-	s.stats.freeSpace(cached.size)
 	return nil
-}
-
-func (s *MemStore) Report() string {
-	s.Lock()
-	defer s.Unlock()
-	return s.stats.Report()
 }

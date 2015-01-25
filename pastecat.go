@@ -48,6 +48,7 @@ var (
 	startTime = time.Now()
 
 	store Store
+	stats Stats
 )
 
 func init() {
@@ -121,6 +122,24 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 	header.Set("Content-Type", contentType)
 }
 
+func setupPasteDeletion(id ID, size int64, after time.Duration) {
+	if after == 0 {
+		return
+	}
+	timer := time.NewTimer(after)
+	go func() {
+		for {
+			<-timer.C
+			if err := store.Delete(id); err == nil {
+				stats.freeSpace(size)
+				break
+			}
+			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
+			timer.Reset(deleteRetry)
+		}
+	}()
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -157,20 +176,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 		content, err := getContentFromForm(r)
+		size := int64(len(content))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		id, err := store.Put(content)
-		if err == ErrReachedMaxNumber || err == ErrReachedMaxStorage {
+		if err := stats.makeSpaceFor(size); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
-		} else if err != nil {
+		}
+		id, err := store.Put(content)
+		if err != nil {
 			log.Printf("Unknown error on POST: %s", err)
+			stats.freeSpace(size)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		setupPasteDeletion(store, id, lifeTime)
+		setupPasteDeletion(id, size, lifeTime)
 		fmt.Fprintf(w, "%s/%s\n", siteURL, id)
 
 	default:
@@ -239,11 +260,11 @@ func main() {
 	ticker := time.NewTicker(statsReport)
 	go func() {
 		for _ = range ticker.C {
-			log.Println(store.Report())
+			log.Println(stats.Report())
 		}
 	}()
 	http.HandleFunc("/", handler)
 	log.Println("Up and running!")
-	log.Println(store.Report())
+	log.Println(stats.Report())
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
