@@ -24,10 +24,6 @@ Fetch it:
 	$ curl http://paste.cat/a63d03b9
 	foo
 
-### Build
-
-	$ go build
-
 ### Run
 
 ##### Quick setup
