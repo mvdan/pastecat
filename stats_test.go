@@ -33,3 +33,26 @@ func TestMakeSpaceFor(t *testing.T) {
 		}
 	}
 }
+
+func TestSpaceChanges(t *testing.T) {
+	stats := Stats{maxNumber: 2, maxStorage: 20}
+	mustSucceed := func(err error) {
+		if err != nil {
+			t.Errorf("Encountered unexpected error")
+		}
+	}
+	mustError := func(err error) {
+		if err == nil {
+			t.Errorf("Did not error as expected")
+		}
+	}
+	mustSucceed(stats.makeSpaceFor(1))
+	mustSucceed(stats.makeSpaceFor(1))
+	mustError(stats.makeSpaceFor(1))
+	stats.freeSpace(1)
+	mustSucceed(stats.makeSpaceFor(1))
+	stats.freeSpace(1)
+	stats.freeSpace(1)
+	mustSucceed(stats.makeSpaceFor(15))
+	mustError(stats.makeSpaceFor(15))
+}
