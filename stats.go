@@ -54,7 +54,7 @@ func (s *Stats) reportNumber() string {
 func (s *Stats) reportStorage() string {
 	if s.maxStorage > 0 {
 		return fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(s.storage),
-			float64(s.storage*100)/float64(s.maxStorage), s.maxStorage)
+			float64(s.storage*100)/float64(s.maxStorage), bytesize.ByteSize(s.maxStorage))
 	}
 	return fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
 }
