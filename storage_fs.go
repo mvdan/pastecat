@@ -184,7 +184,7 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		modTime: modTime,
 	}
 	s.cache[id] = cached
-	setupPasteDeletion(id, size, lifeLeft)
+	setupPasteDeletion(s, id, size, lifeLeft)
 	return nil
 }
 

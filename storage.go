@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"log"
 	"time"
 )
 
@@ -47,4 +48,22 @@ func randomID(available func(ID) bool) (id ID, err error) {
 		}
 	}
 	return id, ErrNoUnusedIDFound
+}
+
+func setupPasteDeletion(s Store, id ID, size int64, after time.Duration) {
+	if after == 0 {
+		return
+	}
+	timer := time.NewTimer(after)
+	go func() {
+		for {
+			<-timer.C
+			if err := s.Delete(id); err == nil {
+				stats.freeSpace(size)
+				break
+			}
+			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
+			timer.Reset(deleteRetry)
+		}
+	}()
 }

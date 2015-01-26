@@ -161,7 +161,7 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 		size:    size,
 	}
 	s.cache[id] = cached
-	setupPasteDeletion(id, size, lifeLeft)
+	setupPasteDeletion(s, id, size, lifeLeft)
 	return nil
 }
 

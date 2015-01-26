@@ -122,24 +122,6 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 	header.Set("Content-Type", contentType)
 }
 
-func setupPasteDeletion(id ID, size int64, after time.Duration) {
-	if after == 0 {
-		return
-	}
-	timer := time.NewTimer(after)
-	go func() {
-		for {
-			<-timer.C
-			if err := store.Delete(id); err == nil {
-				stats.freeSpace(size)
-				break
-			}
-			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
-			timer.Reset(deleteRetry)
-		}
-	}()
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -191,7 +173,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		setupPasteDeletion(id, size, lifeTime)
+		setupPasteDeletion(store, id, size, lifeTime)
 		fmt.Fprintf(w, "%s/%s\n", siteURL, id)
 
 	default:
