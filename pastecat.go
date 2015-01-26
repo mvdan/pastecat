@@ -39,7 +39,6 @@ const (
 var (
 	siteURL, listen string
 	lifeTime        time.Duration
-	maxNumber       int
 
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
@@ -55,7 +54,7 @@ func init() {
 	flag.StringVar(&siteURL, "u", "http://localhost:8080", "URL of the site")
 	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
 	flag.DurationVar(&lifeTime, "t", 24*time.Hour, "Lifetime of the pastes")
-	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
+	flag.IntVar(&stats.maxNumber, "m", 0, "Maximum number of pastes to store at once")
 	flag.Var(&maxSize, "s", "Maximum size of pastes")
 	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
@@ -224,11 +223,16 @@ func main() {
 	flag.Parse()
 	templates = template.Must(template.ParseGlob("tmpl/*.html"))
 
+	if maxStorage > 1*bytesize.EB {
+		log.Fatalf("Specified a maximum storage size that would overflow int64!")
+	}
+	stats.maxStorage = int64(maxStorage)
+
 	log.Printf("siteURL    = %s", siteURL)
 	log.Printf("listen     = %s", listen)
 	log.Printf("lifeTime   = %s", lifeTime)
 	log.Printf("maxSize    = %s", maxSize)
-	log.Printf("maxNumber  = %d", maxNumber)
+	log.Printf("maxNumber  = %d", stats.maxNumber)
 	log.Printf("maxStorage = %s", maxStorage)
 
 	args := flag.Args()

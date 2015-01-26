@@ -17,18 +17,18 @@ var (
 )
 
 type Stats struct {
-	number  int
-	storage int64
+	number, maxNumber   int
+	storage, maxStorage int64
 	sync.RWMutex
 }
 
 func (s *Stats) makeSpaceFor(size int64) error {
 	s.Lock()
 	defer s.Unlock()
-	if maxNumber > 0 && s.number >= maxNumber {
+	if s.maxNumber > 0 && s.number >= s.maxNumber {
 		return ErrReachedMaxNumber
 	}
-	if maxStorage > 0 && s.storage+size > int64(maxStorage) {
+	if s.maxStorage > 0 && s.storage+size > s.maxStorage {
 		return ErrReachedMaxStorage
 	}
 	s.number++
@@ -44,17 +44,17 @@ func (s *Stats) freeSpace(size int64) {
 }
 
 func (s *Stats) reportNumber() string {
-	if maxNumber > 0 {
+	if s.maxNumber > 0 {
 		return fmt.Sprintf("%d (%.2f%% out of %d)", s.number,
-			float64(s.number*100)/float64(maxNumber), maxNumber)
+			float64(s.number*100)/float64(s.maxNumber), s.maxNumber)
 	}
 	return fmt.Sprintf("%d", s.number)
 }
 
 func (s *Stats) reportStorage() string {
-	if maxStorage > 0 {
+	if s.maxStorage > 0 {
 		return fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(s.storage),
-			float64(s.storage*100)/float64(maxStorage), maxStorage)
+			float64(s.storage*100)/float64(s.maxStorage), s.maxStorage)
 	}
 	return fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
 }
