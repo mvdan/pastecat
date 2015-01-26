@@ -47,14 +47,9 @@ Any of the options requiring quantities can take a zero value as infinity.
 
 ##### Storage backends
 
-Persistent:
-
 * **fs** *[directory]* - filesystem structure *(default)*
-* **mmap** *[directory]* - mmapped filesystem structure
-
-Non-persistent:
-
-* **mem** - standard in-memory map
+* **fs-mmap** *[directory]* - mmapped filesystem structure *(requires mmap)*
+* **mem** - standard in-memory map *(non-persistent)*
 
 Note that options must go first.
 

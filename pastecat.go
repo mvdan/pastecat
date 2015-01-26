@@ -186,7 +186,7 @@ func setupStore(storageType string, args []string) (Store, error) {
 		"fs": {
 			"dir": "pastes",
 		},
-		"mmap": {
+		"fs-mmap": {
 			"dir": "pastes",
 		},
 		"mem": {},
@@ -208,7 +208,7 @@ func setupStore(storageType string, args []string) (Store, error) {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
 		return NewFileStore(params["dir"])
-	case "mmap":
+	case "fs-mmap":
 		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
 		return NewMmapStore(params["dir"])
 	case "mem":
