@@ -21,7 +21,7 @@ import (
 const (
 	// Length of the random hexadecimal ids assigned to pastes. At least 4.
 	idSize = 8
-	// Number of times to try getting a random paste id
+	// Number of times to try getting an unused random paste id
 	randTries = 10
 	// Name of the HTTP form field when uploading a paste
 	fieldName = "paste"
@@ -32,6 +32,7 @@ const (
 	// How long to wait before retrying to delete a file
 	deleteRetry = 2 * time.Minute
 
+	// HTTP response strings
 	invalidID     = "invalid paste id"
 	unknownAction = "unsupported action"
 )
