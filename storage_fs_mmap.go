@@ -81,13 +81,13 @@ func (s *MmapStore) Get(id ID) (Paste, error) {
 }
 
 func (s *MmapStore) Put(content []byte) (ID, error) {
-	s.Lock()
-	defer s.Unlock()
 	size := int64(len(content))
 	available := func(id ID) bool {
 		_, e := s.cache[id]
 		return !e
 	}
+	s.Lock()
+	defer s.Unlock()
 	id, err := randomID(available)
 	if err != nil {
 		return id, err
