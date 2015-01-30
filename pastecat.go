@@ -44,7 +44,7 @@ var (
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
 
-	templates *template.Template
+	tmpl      *template.Template
 	startTime = time.Now()
 
 	store Store
@@ -125,14 +125,8 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		switch r.URL.Path {
-		case "/":
-			templates.ExecuteTemplate(w, "index.html",
-				struct{ SiteURL, LimitDesc, FieldName string }{
-					siteURL, describeLimits(), fieldName})
-			return
-		case "/form":
-			templates.ExecuteTemplate(w, "form.html",
+		if _, e := templates[r.URL.Path]; e {
+			tmpl.ExecuteTemplate(w, r.URL.Path,
 				struct{ SiteURL, LimitDesc, FieldName string }{
 					siteURL, describeLimits(), fieldName})
 			return
@@ -222,12 +216,11 @@ func setupStore(storageType string, args []string) (Store, error) {
 func main() {
 	var err error
 	flag.Parse()
-	templates = template.Must(template.ParseGlob("tmpl/*.html"))
-
 	if maxStorage > 1*bytesize.EB {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
 	stats.maxStorage = int64(maxStorage)
+	tmpl = loadTemplates()
 
 	log.Printf("siteURL    = %s", siteURL)
 	log.Printf("listen     = %s", listen)
