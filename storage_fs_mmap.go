@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"os"
 	"sync"
-	"syscall"
 	"time"
+
+	memmap "github.com/edsrzf/mmap-go"
 )
 
 type MmapStore struct {
@@ -21,7 +22,7 @@ type mmapCache struct {
 	reading sync.WaitGroup
 	modTime time.Time
 	path    string
-	mmap    []byte
+	mmap    memmap.MMap
 	size    int64
 }
 
@@ -92,20 +93,20 @@ func (s *MmapStore) Put(content []byte) (ID, error) {
 	if err != nil {
 		return id, err
 	}
-	pastePath := pathFromID(id)
-	if err = writeNewFile(pastePath, content); err != nil {
+	path := pathFromID(id)
+	if err = writeNewFile(path, content); err != nil {
 		return id, err
 	}
-	f, err := os.Open(pastePath)
-	data, err := getMmap(f, len(content))
+	f, err := os.Open(path)
+	mmap, err := getMmap(f)
 	if err != nil {
 		return id, err
 	}
 	s.cache[id] = mmapCache{
-		path:    pastePath,
+		path:    path,
 		modTime: time.Now(),
 		size:    size,
-		mmap:    data,
+		mmap:    mmap,
 	}
 	return id, nil
 }
@@ -119,7 +120,7 @@ func (s *MmapStore) Delete(id ID) error {
 	}
 	delete(s.cache, id)
 	cached.reading.Wait()
-	if err := syscall.Munmap(cached.mmap); err != nil {
+	if err := cached.mmap.Unmap(); err != nil {
 		return err
 	}
 	if err := os.Remove(cached.path); err != nil {
@@ -148,9 +149,9 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	if err := stats.makeSpaceFor(size); err != nil {
 		return err
 	}
-	pasteFile, err := os.Open(path)
-	defer pasteFile.Close()
-	mmap, err := getMmap(pasteFile, int(fileInfo.Size()))
+	f, err := os.Open(path)
+	defer f.Close()
+	mmap, err := getMmap(f)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,6 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	return nil
 }
 
-func getMmap(file *os.File, length int) ([]byte, error) {
-	fd := int(file.Fd())
-	return syscall.Mmap(fd, 0, length, syscall.PROT_READ, syscall.MAP_SHARED)
+func getMmap(f *os.File) (memmap.MMap, error) {
+	return memmap.Map(f, memmap.RDONLY, 0)
 }
