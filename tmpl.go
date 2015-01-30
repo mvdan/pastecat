@@ -3,27 +3,25 @@
 
 package main
 
-import (
-	"html/template"
-)
+import "html/template"
 
-func loadTemplates() *template.Template {
-	var t *template.Template
+var tmpl *template.Template
+
+func loadTemplates() {
 	for name, s := range templates {
-		var tmpl *template.Template
-		if t == nil {
-			t = template.New(name)
+		var t *template.Template
+		if tmpl == nil {
+			tmpl = template.New(name)
 		}
-		if name == t.Name() {
-			tmpl = t
+		if name == tmpl.Name() {
+			t = tmpl
 		} else {
-			tmpl = t.New(name)
+			t = tmpl.New(name)
 		}
-		if _, err := tmpl.Parse(s); err != nil {
+		if _, err := t.Parse(s); err != nil {
 			panic("could not load templates")
 		}
 	}
-	return t
 }
 
 var templates = map[string]string{

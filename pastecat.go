@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -44,7 +43,6 @@ var (
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
 
-	tmpl      *template.Template
 	startTime = time.Now()
 
 	store Store
@@ -236,7 +234,7 @@ func main() {
 		log.Fatalf("Could not setup paste store: %s", err)
 	}
 
-	tmpl = loadTemplates()
+	loadTemplates()
 	ticker := time.NewTicker(statsReport)
 	go func() {
 		for _ = range ticker.C {
