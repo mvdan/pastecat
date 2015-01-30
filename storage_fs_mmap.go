@@ -145,6 +145,9 @@ func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	if size == 0 {
 		return os.Remove(path)
 	}
+	if err := stats.makeSpaceFor(size); err != nil {
+		return err
+	}
 	pasteFile, err := os.Open(path)
 	defer pasteFile.Close()
 	mmap, err := getMmap(pasteFile, int(fileInfo.Size()))

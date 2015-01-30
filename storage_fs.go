@@ -175,6 +175,9 @@ func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error 
 	if size == 0 {
 		return os.Remove(path)
 	}
+	if err := stats.makeSpaceFor(size); err != nil {
+		return err
+	}
 	cached := fileCache{
 		path:    path,
 		size:    size,
