@@ -220,7 +220,6 @@ func main() {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
 	stats.maxStorage = int64(maxStorage)
-	tmpl = loadTemplates()
 
 	log.Printf("siteURL    = %s", siteURL)
 	log.Printf("listen     = %s", listen)
@@ -237,6 +236,7 @@ func main() {
 		log.Fatalf("Could not setup paste store: %s", err)
 	}
 
+	tmpl = loadTemplates()
 	ticker := time.NewTicker(statsReport)
 	go func() {
 		for _ = range ticker.C {
