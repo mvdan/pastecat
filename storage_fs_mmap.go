@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -56,14 +57,14 @@ func (c MmapPaste) Size() int64 {
 	return c.cache.size
 }
 
-func NewMmapStore(dir string) (*MmapStore, error) {
+func NewMmapStore(stats *Stats, dir string) (*MmapStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}
 	s := new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
-	if err := setupSubdirs(s.dir, s.Recover); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats)); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -129,41 +130,43 @@ func (s *MmapStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *MmapStore) Recover(path string, fileInfo os.FileInfo, err error) error {
-	if err != nil || fileInfo.IsDir() {
-		return err
+func (s *MmapStore) recoverFunc(stats *Stats) filepath.WalkFunc {
+	return func(path string, fileInfo os.FileInfo, err error) error {
+		if err != nil || fileInfo.IsDir() {
+			return err
+		}
+		id, err := idFromPath(path)
+		if err != nil {
+			return err
+		}
+		modTime := fileInfo.ModTime()
+		lifeLeft := modTime.Add(lifeTime).Sub(startTime)
+		if lifeTime > 0 && lifeLeft <= 0 {
+			return os.Remove(path)
+		}
+		size := fileInfo.Size()
+		if size == 0 {
+			return os.Remove(path)
+		}
+		if err := stats.makeSpaceFor(size); err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		defer f.Close()
+		mmap, err := getMmap(f)
+		if err != nil {
+			return err
+		}
+		cached := mmapCache{
+			modTime: modTime,
+			path:    path,
+			mmap:    mmap,
+			size:    size,
+		}
+		s.cache[id] = cached
+		setupPasteDeletion(s, stats, id, size, lifeLeft)
+		return nil
 	}
-	id, err := idFromPath(path)
-	if err != nil {
-		return err
-	}
-	modTime := fileInfo.ModTime()
-	lifeLeft := modTime.Add(lifeTime).Sub(startTime)
-	if lifeTime > 0 && lifeLeft <= 0 {
-		return os.Remove(path)
-	}
-	size := fileInfo.Size()
-	if size == 0 {
-		return os.Remove(path)
-	}
-	if err := stats.makeSpaceFor(size); err != nil {
-		return err
-	}
-	f, err := os.Open(path)
-	defer f.Close()
-	mmap, err := getMmap(f)
-	if err != nil {
-		return err
-	}
-	cached := mmapCache{
-		modTime: modTime,
-		path:    path,
-		mmap:    mmap,
-		size:    size,
-	}
-	s.cache[id] = cached
-	setupPasteDeletion(s, id, size, lifeLeft)
-	return nil
 }
 
 func getMmap(f *os.File) (memmap.MMap, error) {

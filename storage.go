@@ -50,7 +50,7 @@ func randomID(available func(ID) bool) (id ID, err error) {
 	return id, ErrNoUnusedIDFound
 }
 
-func setupPasteDeletion(s Store, id ID, size int64, after time.Duration) {
+func setupPasteDeletion(store Store, stats *Stats, id ID, size int64, after time.Duration) {
 	if after == 0 {
 		return
 	}
@@ -58,7 +58,7 @@ func setupPasteDeletion(s Store, id ID, size int64, after time.Duration) {
 	go func() {
 		for {
 			<-timer.C
-			if err := s.Delete(id); err == nil {
+			if err := store.Delete(id); err == nil {
 				stats.freeSpace(size)
 				break
 			}

@@ -59,14 +59,14 @@ func (c FilePaste) Size() int64 {
 	return c.cache.size
 }
 
-func NewFileStore(dir string) (*FileStore, error) {
+func NewFileStore(stats *Stats, dir string) (*FileStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}
 	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	if err := setupSubdirs(s.dir, s.Recover); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats)); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -158,34 +158,36 @@ func idFromPath(path string) (ID, error) {
 	return IDFromString(hexID)
 }
 
-func (s *FileStore) Recover(path string, fileInfo os.FileInfo, err error) error {
-	if err != nil || fileInfo.IsDir() {
-		return err
+func (s *FileStore) recoverFunc(stats *Stats) filepath.WalkFunc {
+	return func(path string, fileInfo os.FileInfo, err error) error {
+		if err != nil || fileInfo.IsDir() {
+			return err
+		}
+		id, err := idFromPath(path)
+		if err != nil {
+			return err
+		}
+		modTime := fileInfo.ModTime()
+		lifeLeft := modTime.Add(lifeTime).Sub(startTime)
+		if lifeTime > 0 && lifeLeft <= 0 {
+			return os.Remove(path)
+		}
+		size := fileInfo.Size()
+		if size == 0 {
+			return os.Remove(path)
+		}
+		if err := stats.makeSpaceFor(size); err != nil {
+			return err
+		}
+		cached := fileCache{
+			path:    path,
+			size:    size,
+			modTime: modTime,
+		}
+		s.cache[id] = cached
+		setupPasteDeletion(s, stats, id, size, lifeLeft)
+		return nil
 	}
-	id, err := idFromPath(path)
-	if err != nil {
-		return err
-	}
-	modTime := fileInfo.ModTime()
-	lifeLeft := modTime.Add(lifeTime).Sub(startTime)
-	if lifeTime > 0 && lifeLeft <= 0 {
-		return os.Remove(path)
-	}
-	size := fileInfo.Size()
-	if size == 0 {
-		return os.Remove(path)
-	}
-	if err := stats.makeSpaceFor(size); err != nil {
-		return err
-	}
-	cached := fileCache{
-		path:    path,
-		size:    size,
-		modTime: modTime,
-	}
-	s.cache[id] = cached
-	setupPasteDeletion(s, id, size, lifeLeft)
-	return nil
 }
 
 func setupTopDir(topdir string) error {
@@ -195,7 +197,7 @@ func setupTopDir(topdir string) error {
 	return os.Chdir(topdir)
 }
 
-func setupSubdirs(topdir string, rec func(string, os.FileInfo, error) error) error {
+func setupSubdirs(topdir string, rec filepath.WalkFunc) error {
 	for i := 0; i < 256; i++ {
 		if err := setupSubdir(topdir, rec, byte(i)); err != nil {
 			return err
@@ -204,7 +206,7 @@ func setupSubdirs(topdir string, rec func(string, os.FileInfo, error) error) err
 	return nil
 }
 
-func setupSubdir(topdir string, rec func(string, os.FileInfo, error) error, h byte) error {
+func setupSubdir(topdir string, rec filepath.WalkFunc, h byte) error {
 	dir := hex.EncodeToString([]byte{h})
 	if stat, err := os.Stat(dir); err == nil {
 		if !stat.IsDir() {
