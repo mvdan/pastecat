@@ -124,9 +124,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		if _, e := templates[r.URL.Path]; e {
-			tmpl.ExecuteTemplate(w, r.URL.Path,
+			err := tmpl.ExecuteTemplate(w, r.URL.Path,
 				struct{ SiteURL, LimitDesc, FieldName string }{
 					siteURL, describeLimits(), fieldName})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		id, err := IDFromString(r.URL.Path[1:])
