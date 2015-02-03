@@ -43,8 +43,6 @@ var (
 
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
-
-	startTime = time.Now()
 )
 
 func init() {

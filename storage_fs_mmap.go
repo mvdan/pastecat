@@ -64,7 +64,7 @@ func NewMmapStore(stats *Stats, dir string) (*MmapStore, error) {
 	s := new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
-	if err := setupSubdirs(s.dir, s.recoverFunc(stats)); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats, time.Now())); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -130,7 +130,7 @@ func (s *MmapStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *MmapStore) recoverFunc(stats *Stats) filepath.WalkFunc {
+func (s *MmapStore) recoverFunc(stats *Stats, startTime time.Time) filepath.WalkFunc {
 	return func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil || fileInfo.IsDir() {
 			return err

@@ -66,7 +66,7 @@ func NewFileStore(stats *Stats, dir string) (*FileStore, error) {
 	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	if err := setupSubdirs(s.dir, s.recoverFunc(stats)); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats, time.Now())); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -158,7 +158,7 @@ func idFromPath(path string) (ID, error) {
 	return IDFromString(hexID)
 }
 
-func (s *FileStore) recoverFunc(stats *Stats) filepath.WalkFunc {
+func (s *FileStore) recoverFunc(stats *Stats, startTime time.Time) filepath.WalkFunc {
 	return func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil || fileInfo.IsDir() {
 			return err
