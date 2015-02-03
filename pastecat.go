@@ -219,6 +219,9 @@ func main() {
 	if maxStorage > 1*bytesize.EB {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
+	if maxSize > 1*bytesize.EB {
+		log.Fatalf("Specified a maximum paste size that would overflow int64!")
+	}
 	stats := Stats{
 		maxNumber:  *maxNumber,
 		maxStorage: int64(maxStorage),
