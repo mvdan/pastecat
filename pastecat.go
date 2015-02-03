@@ -6,7 +6,6 @@ package main
 import (
 	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mvdan/bytesize"
+	"github.com/mvdan/pflag"
 )
 
 const (
@@ -37,18 +37,18 @@ const (
 )
 
 var (
-	siteURL   = flag.String("u", "http://localhost:8080", "URL of the site")
-	listen    = flag.String("l", ":8080", "Host and port to listen to")
-	lifeTime  = flag.Duration("t", 24*time.Hour, "Lifetime of the pastes")
-	maxNumber = flag.Int("m", 0, "Maximum number of pastes to store at once")
+	siteURL   = pflag.StringP("url", "u", "http://localhost:8080", "URL of the site")
+	listen    = pflag.StringP("listen", "l", ":8080", "Host and port to listen to")
+	lifeTime  = pflag.DurationP("lifetime", "t", 24*time.Hour, "Lifetime of the pastes")
+	maxNumber = pflag.IntP("max-number", "m", 0, "Maximum number of pastes to store at once")
 
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
 )
 
 func init() {
-	flag.Var(&maxSize, "s", "Maximum size of pastes")
-	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
+	pflag.VarP(&maxSize, "max-size", "s", "Maximum size of pastes")
+	pflag.VarP(&maxStorage, "max-storage", "M", "Maximum storage size to use at once")
 }
 
 // Binary representation of an identifier for a paste
@@ -215,7 +215,7 @@ func setupStore(stats *Stats, storageType string, args []string) (Store, error) 
 }
 
 func main() {
-	flag.Parse()
+	pflag.Parse()
 	if maxStorage > 1*bytesize.EB {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
@@ -233,7 +233,7 @@ func main() {
 	log.Printf("maxNumber  = %d", *maxNumber)
 	log.Printf("maxStorage = %s", maxStorage)
 
-	args := flag.Args()
+	args := pflag.Args()
 	if len(args) == 0 {
 		args = []string{"fs"}
 	}

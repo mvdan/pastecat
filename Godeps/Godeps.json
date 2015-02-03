@@ -9,6 +9,10 @@
 		{
 			"ImportPath": "github.com/mvdan/bytesize",
 			"Rev": "b70382cfe9d125ce65794b149bda85dd646d2aec"
+		},
+		{
+			"ImportPath": "github.com/mvdan/pflag",
+			"Rev": "0d54be5bfeb42a0a5726d196f66b3d06adde88ee"
 		}
 	]
 }
