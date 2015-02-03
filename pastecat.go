@@ -37,19 +37,16 @@ const (
 )
 
 var (
-	siteURL, listen string
-	lifeTime        time.Duration
-	maxNumber       int
+	siteURL = flag.String("u", "http://localhost:8080", "URL of the site")
+	listen = flag.String("l", ":8080", "Host and port to listen to")
+	lifeTime = flag.Duration("t", 24*time.Hour, "Lifetime of the pastes")
+	maxNumber = flag.Int("m", 0, "Maximum number of pastes to store at once")
 
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
 )
 
 func init() {
-	flag.StringVar(&siteURL, "u", "http://localhost:8080", "URL of the site")
-	flag.StringVar(&listen, "l", ":8080", "Host and port to listen to")
-	flag.DurationVar(&lifeTime, "t", 24*time.Hour, "Lifetime of the pastes")
-	flag.IntVar(&maxNumber, "m", 0, "Maximum number of pastes to store at once")
 	flag.Var(&maxSize, "s", "Maximum size of pastes")
 	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
@@ -80,8 +77,8 @@ func describeLimits() string {
 	if maxSize > 0 {
 		limits = append(limits, fmt.Sprintf("Maximum size per paste is %s.", maxSize))
 	}
-	if lifeTime > 0 {
-		limits = append(limits, fmt.Sprintf("Pastes will be deleted after %s.", lifeTime))
+	if *lifeTime > 0 {
+		limits = append(limits, fmt.Sprintf("Pastes will be deleted after %s.", *lifeTime))
 	}
 	if len(limits) > 0 {
 		return strings.Join(limits, " ") + "\n\n"
@@ -106,8 +103,8 @@ func getContentFromForm(r *http.Request) ([]byte, error) {
 func setHeaders(header http.Header, id ID, paste Paste) {
 	modTime := paste.ModTime()
 	header.Set("Etag", fmt.Sprintf("%d-%s", modTime.Unix(), id))
-	if lifeTime > 0 {
-		deathTime := modTime.Add(lifeTime)
+	if *lifeTime > 0 {
+		deathTime := modTime.Add(*lifeTime)
 		lifeLeft := deathTime.Sub(time.Now())
 		header.Set("Expires", deathTime.UTC().Format(http.TimeFormat))
 		header.Set("Cache-Control", fmt.Sprintf(
@@ -120,7 +117,7 @@ func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
 	if _, e := templates[r.URL.Path]; e {
 		err := tmpl.ExecuteTemplate(w, r.URL.Path,
 			struct{ SiteURL, LimitDesc, FieldName string }{
-				siteURL, describeLimits(), fieldName})
+				*siteURL, describeLimits(), fieldName})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -163,8 +160,8 @@ func handlePost(store Store, stats *Stats, w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	setupPasteDeletion(store, stats, id, size, lifeTime)
-	fmt.Fprintf(w, "%s/%s\n", siteURL, id)
+	setupPasteDeletion(store, stats, id, size, *lifeTime)
+	fmt.Fprintf(w, "%s/%s\n", *siteURL, id)
 }
 
 func newHandler(store Store, stats *Stats) http.HandlerFunc {
@@ -223,14 +220,14 @@ func main() {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
 	stats := Stats{
-		maxNumber:  maxNumber,
+		maxNumber:  *maxNumber,
 		maxStorage: int64(maxStorage),
 	}
-	log.Printf("siteURL    = %s", siteURL)
-	log.Printf("listen     = %s", listen)
-	log.Printf("lifeTime   = %s", lifeTime)
+	log.Printf("siteURL    = %s", *siteURL)
+	log.Printf("listen     = %s", *listen)
+	log.Printf("lifeTime   = %s", *lifeTime)
 	log.Printf("maxSize    = %s", maxSize)
-	log.Printf("maxNumber  = %d", maxNumber)
+	log.Printf("maxNumber  = %d", *maxNumber)
 	log.Printf("maxStorage = %s", maxStorage)
 
 	args := flag.Args()
@@ -251,5 +248,5 @@ func main() {
 	http.HandleFunc("/", newHandler(store, &stats))
 	log.Println("Up and running!")
 	log.Println(stats.Report())
-	log.Fatal(http.ListenAndServe(listen, nil))
+	log.Fatal(http.ListenAndServe(*listen, nil))
 }

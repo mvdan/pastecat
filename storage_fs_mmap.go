@@ -140,8 +140,8 @@ func (s *MmapStore) recoverFunc(stats *Stats, startTime time.Time) filepath.Walk
 			return err
 		}
 		modTime := fileInfo.ModTime()
-		lifeLeft := modTime.Add(lifeTime).Sub(startTime)
-		if lifeTime > 0 && lifeLeft <= 0 {
+		lifeLeft := modTime.Add(*lifeTime).Sub(startTime)
+		if *lifeTime > 0 && lifeLeft <= 0 {
 			return os.Remove(path)
 		}
 		size := fileInfo.Size()
