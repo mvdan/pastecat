@@ -38,7 +38,8 @@ type Store interface {
 	Delete(id ID) error
 }
 
-func randomID(available func(ID) bool) (id ID, err error) {
+func randomID(available func(ID) bool) (ID, error) {
+	var id ID
 	for try := 0; try < randTries; try++ {
 		if _, err := rand.Read(id[:]); err != nil {
 			continue
@@ -50,7 +51,7 @@ func randomID(available func(ID) bool) (id ID, err error) {
 	return id, ErrNoUnusedIDFound
 }
 
-func setupPasteDeletion(store Store, stats *Stats, id ID, size int64, after time.Duration) {
+func setupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Duration) {
 	if after == 0 {
 		return
 	}
@@ -58,7 +59,7 @@ func setupPasteDeletion(store Store, stats *Stats, id ID, size int64, after time
 	go func() {
 		for {
 			<-timer.C
-			if err := store.Delete(id); err == nil {
+			if err := s.Delete(id); err == nil {
 				stats.freeSpace(size)
 				break
 			}
