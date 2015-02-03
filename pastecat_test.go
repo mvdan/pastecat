@@ -35,8 +35,10 @@ func TestIDFromString(t *testing.T) {
 		got, err := IDFromString(c.in)
 		if c.wantErr {
 			if err == nil {
-				t.Errorf(`IDFromString("%s") didn't error as expected.`, c.in)
+				t.Errorf(`IDFromString("%s") didn't error as expected`, c.in)
 			}
+		} else if err != nil {
+			t.Errorf(`IDFromString("%s") errored unexpectedly`, c.in)
 		} else if !reflect.DeepEqual(got[:], c.want) {
 			t.Errorf(`IDFromString("%s") got %q, want %q`, c.in, got[:], c.want)
 		}
