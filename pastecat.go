@@ -37,9 +37,9 @@ const (
 )
 
 var (
-	siteURL = flag.String("u", "http://localhost:8080", "URL of the site")
-	listen = flag.String("l", ":8080", "Host and port to listen to")
-	lifeTime = flag.Duration("t", 24*time.Hour, "Lifetime of the pastes")
+	siteURL   = flag.String("u", "http://localhost:8080", "URL of the site")
+	listen    = flag.String("l", ":8080", "Host and port to listen to")
+	lifeTime  = flag.Duration("t", 24*time.Hour, "Lifetime of the pastes")
 	maxNumber = flag.Int("m", 0, "Maximum number of pastes to store at once")
 
 	maxSize    = 1 * bytesize.MB
