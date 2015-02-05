@@ -57,14 +57,14 @@ func (c MmapPaste) Size() int64 {
 	return c.cache.size
 }
 
-func NewMmapStore(stats *Stats, dir string) (*MmapStore, error) {
+func NewMmapStore(stats *Stats, lifeTime time.Duration, dir string) (*MmapStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}
 	s := new(MmapStore)
 	s.dir = dir
 	s.cache = make(map[ID]mmapCache)
-	if err := setupSubdirs(s.dir, s.recoverFunc(stats, time.Now())); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats, lifeTime, time.Now())); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -130,7 +130,7 @@ func (s *MmapStore) Delete(id ID) error {
 	return nil
 }
 
-func (s *MmapStore) recoverFunc(stats *Stats, startTime time.Time) filepath.WalkFunc {
+func (s *MmapStore) recoverFunc(stats *Stats, lifeTime time.Duration, startTime time.Time) filepath.WalkFunc {
 	return func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil || fileInfo.IsDir() {
 			return err
@@ -140,8 +140,8 @@ func (s *MmapStore) recoverFunc(stats *Stats, startTime time.Time) filepath.Walk
 			return err
 		}
 		modTime := fileInfo.ModTime()
-		lifeLeft := modTime.Add(*lifeTime).Sub(startTime)
-		if *lifeTime > 0 && lifeLeft <= 0 {
+		lifeLeft := modTime.Add(lifeTime).Sub(startTime)
+		if lifeTime > 0 && lifeLeft <= 0 {
 			return os.Remove(path)
 		}
 		size := fileInfo.Size()

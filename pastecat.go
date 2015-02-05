@@ -177,7 +177,7 @@ func newHandler(store Store, stats *Stats) http.HandlerFunc {
 	})
 }
 
-func setupStore(stats *Stats, storageType string, args []string) (Store, error) {
+func setupStore(stats *Stats, lifeTime time.Duration, storageType string, args []string) (Store, error) {
 	params, e := map[string]map[string]string{
 		"fs": {
 			"dir": "pastes",
@@ -203,10 +203,10 @@ func setupStore(stats *Stats, storageType string, args []string) (Store, error) 
 	switch storageType {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
-		return NewFileStore(stats, params["dir"])
+		return NewFileStore(stats, lifeTime, params["dir"])
 	case "fs-mmap":
 		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
-		return NewMmapStore(stats, params["dir"])
+		return NewMmapStore(stats, lifeTime, params["dir"])
 	case "mem":
 		log.Printf("Starting up in-memory store")
 		return NewMemStore()
@@ -237,7 +237,7 @@ func main() {
 	if len(args) == 0 {
 		args = []string{"fs"}
 	}
-	store, err := setupStore(&stats, args[0], args[1:])
+	store, err := setupStore(&stats, *lifeTime, args[0], args[1:])
 	if err != nil {
 		log.Fatalf("Could not setup paste store: %s", err)
 	}

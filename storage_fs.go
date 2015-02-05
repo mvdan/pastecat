@@ -59,14 +59,14 @@ func (c FilePaste) Size() int64 {
 	return c.cache.size
 }
 
-func NewFileStore(stats *Stats, dir string) (*FileStore, error) {
+func NewFileStore(stats *Stats, lifeTime time.Duration, dir string) (*FileStore, error) {
 	if err := setupTopDir(dir); err != nil {
 		return nil, err
 	}
 	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	if err := setupSubdirs(s.dir, s.recoverFunc(stats, time.Now())); err != nil {
+	if err := setupSubdirs(s.dir, s.recoverFunc(stats, lifeTime, time.Now())); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -158,7 +158,7 @@ func idFromPath(path string) (ID, error) {
 	return IDFromString(hexID)
 }
 
-func (s *FileStore) recoverFunc(stats *Stats, startTime time.Time) filepath.WalkFunc {
+func (s *FileStore) recoverFunc(stats *Stats, lifeTime time.Duration, startTime time.Time) filepath.WalkFunc {
 	return func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil || fileInfo.IsDir() {
 			return err
@@ -168,8 +168,8 @@ func (s *FileStore) recoverFunc(stats *Stats, startTime time.Time) filepath.Walk
 			return err
 		}
 		modTime := fileInfo.ModTime()
-		lifeLeft := modTime.Add(*lifeTime).Sub(startTime)
-		if *lifeTime > 0 && lifeLeft <= 0 {
+		lifeLeft := modTime.Add(lifeTime).Sub(startTime)
+		if lifeTime > 0 && lifeLeft <= 0 {
 			return os.Remove(path)
 		}
 		size := fileInfo.Size()
