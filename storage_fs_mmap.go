@@ -48,14 +48,9 @@ func (c MmapPaste) Close() error {
 	return nil
 }
 
-func (c MmapPaste) ModTime() time.Time {
-	return c.cache.modTime
-}
+func (c MmapPaste) ModTime() time.Time { return c.cache.modTime }
 
-func (c MmapPaste) Size() int64 {
-	return c.cache.size
-}
-
+func (c MmapPaste) Size() int64 { return c.cache.size }
 
 func NewMmapStore(stats *Stats, lifeTime time.Duration, dir string) (*MmapStore, error) {
 	if err := setupTopDir(dir); err != nil {

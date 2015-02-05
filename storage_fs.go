@@ -51,13 +51,9 @@ func (c FilePaste) Close() error {
 	return err
 }
 
-func (c FilePaste) ModTime() time.Time {
-	return c.cache.modTime
-}
+func (c FilePaste) ModTime() time.Time { return c.cache.modTime }
 
-func (c FilePaste) Size() int64 {
-	return c.cache.size
-}
+func (c FilePaste) Size() int64 { return c.cache.size }
 
 func NewFileStore(stats *Stats, lifeTime time.Duration, dir string) (*FileStore, error) {
 	if err := setupTopDir(dir); err != nil {

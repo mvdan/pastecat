@@ -37,17 +37,11 @@ func (ps MemPaste) Seek(offset int64, whence int) (i int64, err error) {
 	return ps.content.Seek(offset, whence)
 }
 
-func (ps MemPaste) Close() error {
-	return nil
-}
+func (ps MemPaste) Close() error { return nil }
 
-func (ps MemPaste) ModTime() time.Time {
-	return ps.cache.modTime
-}
+func (ps MemPaste) ModTime() time.Time { return ps.cache.modTime }
 
-func (ps MemPaste) Size() int64 {
-	return ps.cache.size
-}
+func (ps MemPaste) Size() int64 { return ps.cache.size }
 
 func NewMemStore() (s *MemStore, err error) {
 	s = new(MemStore)
