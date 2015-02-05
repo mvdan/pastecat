@@ -66,7 +66,17 @@ func NewFileStore(stats *Stats, lifeTime time.Duration, dir string) (*FileStore,
 	s := new(FileStore)
 	s.dir = dir
 	s.cache = make(map[ID]fileCache)
-	if err := setupSubdirs(s.dir, s.recoverFunc(stats, lifeTime, time.Now())); err != nil {
+
+	insert := func(id ID, path string, modTime time.Time, size int64) error {
+		cached := fileCache{
+			path:    path,
+			size:    size,
+			modTime: modTime,
+		}
+		s.cache[id] = cached
+		return nil
+	}
+	if err := setupSubdirs(s.dir, fileRecover(insert, s, stats, lifeTime)); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -158,7 +168,10 @@ func idFromPath(path string) (ID, error) {
 	return IDFromString(hexID)
 }
 
-func (s *FileStore) recoverFunc(stats *Stats, lifeTime time.Duration, startTime time.Time) filepath.WalkFunc {
+type fileInsert func(id ID, path string, modTime time.Time, size int64) error
+
+func fileRecover(insert fileInsert, s Store, stats *Stats, lifeTime time.Duration) filepath.WalkFunc {
+	startTime := time.Now()
 	return func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil || fileInfo.IsDir() {
 			return err
@@ -179,12 +192,9 @@ func (s *FileStore) recoverFunc(stats *Stats, lifeTime time.Duration, startTime 
 		if err := stats.makeSpaceFor(size); err != nil {
 			return err
 		}
-		cached := fileCache{
-			path:    path,
-			size:    size,
-			modTime: modTime,
+		if err := insert(id, path, modTime, size); err != nil {
+			return err
 		}
-		s.cache[id] = cached
 		setupPasteDeletion(s, stats, id, size, lifeLeft)
 		return nil
 	}
