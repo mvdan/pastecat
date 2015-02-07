@@ -12,11 +12,14 @@ import (
 )
 
 var (
+	// ErrPasteNotFound means that we could not find the requested paste
 	ErrPasteNotFound   = errors.New("paste could not be found")
+	// ErrNoUnusedIDFound means that we could not find an unused ID to
+	// allocate to a new paste
 	ErrNoUnusedIDFound = errors.New("gave up trying to find an unused random id")
 )
 
-// Interface for accessing paste content and information
+// A Paste represents the paste's content and information
 type Paste interface {
 	io.Reader
 	io.ReaderAt
@@ -26,6 +29,8 @@ type Paste interface {
 	Size() int64
 }
 
+// A Store represents a database holding multiple pastes identified by their
+// ids
 type Store interface {
 	// Get the paste known by the given ID and an error, if any.
 	Get(id ID) (Paste, error)

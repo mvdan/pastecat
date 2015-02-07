@@ -12,7 +12,10 @@ import (
 )
 
 var (
+	// ErrReachedMaxNumber means that we reached the maximum number of pastes
 	ErrReachedMaxNumber  = errors.New("reached maximum number of pastes")
+	// ErrReachedMaxStorage means that we reached the maximum storage
+	// allocated for pastes
 	ErrReachedMaxStorage = errors.New("reached maximum storage of pastes")
 )
 

@@ -51,10 +51,10 @@ func init() {
 	pflag.VarP(&maxStorage, "max-storage", "M", "Maximum storage size to use at once")
 }
 
-// Binary representation of an identifier for a paste
+// ID is the binary representation of the identifier for a paste
 type ID [idSize / 2]byte
 
-// Parse a hexadecimal string into an ID. Return the resulting ID and an
+// IDFromString parses a hexadecimal string into an ID. Returns the ID and an
 // error, if any.
 func IDFromString(hexID string) (id ID, err error) {
 	if len(hexID) != idSize {
