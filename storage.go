@@ -13,7 +13,7 @@ import (
 
 var (
 	// ErrPasteNotFound means that we could not find the requested paste
-	ErrPasteNotFound   = errors.New("paste could not be found")
+	ErrPasteNotFound = errors.New("paste could not be found")
 	// ErrNoUnusedIDFound means that we could not find an unused ID to
 	// allocate to a new paste
 	ErrNoUnusedIDFound = errors.New("gave up trying to find an unused random id")

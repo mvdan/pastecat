@@ -244,7 +244,7 @@ func main() {
 	loadTemplates()
 	ticker := time.NewTicker(statsReport)
 	go func() {
-		for _ = range ticker.C {
+		for range ticker.C {
 			log.Println(stats.Report())
 		}
 	}()
