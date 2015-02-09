@@ -216,6 +216,7 @@ func main() {
 	if maxSize > 1*bytesize.EB {
 		log.Fatalf("Specified a maximum paste size that would overflow int64!")
 	}
+	loadTemplates()
 	stats := Stats{
 		maxNumber:  *maxNumber,
 		maxStorage: int64(maxStorage),
@@ -235,7 +236,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not setup paste store: %s", err)
 	}
-	loadTemplates()
 	ticker := time.NewTicker(statsReport)
 	go func() {
 		for range ticker.C {
