@@ -60,7 +60,6 @@ Pastes will be deleted after {{.LifeTime}}
 		<br/>
 		<button type="submit">Paste text</button>
 	</form>
-	<br/>
 	<form action="{{.SiteURL}}" method="post" enctype="multipart/form-data">
 		<input type="file" name="{{.FieldName}}"></input>
 		<br/>
