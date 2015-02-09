@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/mvdan/bytesize"
@@ -72,20 +71,6 @@ func (id ID) String() string {
 	return hex.EncodeToString(id[:])
 }
 
-func describeLimits() string {
-	var limits []string
-	if maxSize > 0 {
-		limits = append(limits, fmt.Sprintf("Maximum size per paste is %s.", maxSize))
-	}
-	if *lifeTime > 0 {
-		limits = append(limits, fmt.Sprintf("Pastes will be deleted after %s.", *lifeTime))
-	}
-	if len(limits) > 0 {
-		return strings.Join(limits, " ") + "\n\n"
-	}
-	return ""
-}
-
 func getContentFromForm(r *http.Request) ([]byte, error) {
 	if value := r.FormValue(fieldName); len(value) > 0 {
 		return []byte(value), nil
@@ -116,8 +101,17 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
 	if _, e := templates[r.URL.Path]; e {
 		err := tmpl.ExecuteTemplate(w, r.URL.Path,
-			struct{ SiteURL, LimitDesc, FieldName string }{
-				*siteURL, describeLimits(), fieldName})
+			struct {
+				SiteURL   string
+				MaxSize   bytesize.ByteSize
+				LifeTime  time.Duration
+				FieldName string
+			}{
+				SiteURL:   *siteURL,
+				MaxSize:   maxSize,
+				LifeTime:  *lifeTime,
+				FieldName: fieldName,
+			})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
