@@ -113,7 +113,7 @@ func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
 				FieldName: fieldName,
 			})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Error executing template for %s: %s", r.URL.Path, err)
 		}
 		return
 	}
