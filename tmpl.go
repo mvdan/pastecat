@@ -44,9 +44,9 @@ Fetch it:
 
 You can also use the <a href="form">web form</a>.
 {{if gt .MaxSize 0.0}}
-Maximum size per paste is {{.MaxSize}}
+The maximum size per paste is {{.MaxSize}}.
 {{end}}{{if gt .LifeTime 0}}
-Pastes will be deleted after {{.LifeTime}}
+Each paste will be deleted after {{.LifeTime}}.
 {{end}}
 <a href="http://github.com/mvdan/pastecat">github.com/mvdan/pastecat</a>
 </pre>
