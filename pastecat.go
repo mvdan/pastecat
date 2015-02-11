@@ -231,12 +231,12 @@ func main() {
 
 	ticker := time.NewTicker(reportInterval)
 	go func() {
+		statsReport()
 		for range ticker.C {
 			statsReport()
 		}
 	}()
 	http.HandleFunc("/", newHandler(store, &stats))
 	log.Println("Up and running!")
-	statsReport()
 	log.Fatal(http.ListenAndServe(*listen, nil))
 }
