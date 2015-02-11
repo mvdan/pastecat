@@ -1,4 +1,4 @@
-package main
+package storage
 
 import (
 	"testing"
@@ -23,19 +23,19 @@ func TestMakeSpaceFor(t *testing.T) {
 	} {
 		stats := Stats{
 			number:     c.inNumber,
-			maxNumber:  c.inMaxNumber,
+			MaxNumber:  c.inMaxNumber,
 			storage:    c.inStorage,
-			maxStorage: c.inMaxStorage,
+			MaxStorage: c.inMaxStorage,
 		}
-		got := stats.makeSpaceFor(c.inSize)
+		got := stats.MakeSpaceFor(c.inSize)
 		if got != c.want {
-			t.Errorf(`%+v.makeSpaceFor(%v) didn't error as expected.`, stats, c.inSize)
+			t.Errorf(`%+v.MakeSpaceFor(%v) didn't error as expected.`, stats, c.inSize)
 		}
 	}
 }
 
 func TestSpaceChanges(t *testing.T) {
-	stats := Stats{maxNumber: 2, maxStorage: 20}
+	stats := Stats{MaxNumber: 2, MaxStorage: 20}
 	mustSucceed := func(err error) {
 		if err != nil {
 			t.Errorf("Encountered unexpected error")
@@ -46,13 +46,13 @@ func TestSpaceChanges(t *testing.T) {
 			t.Errorf("Did not error as expected")
 		}
 	}
-	mustSucceed(stats.makeSpaceFor(1))
-	mustSucceed(stats.makeSpaceFor(1))
-	mustError(stats.makeSpaceFor(1))
-	stats.freeSpace(1)
-	mustSucceed(stats.makeSpaceFor(1))
-	stats.freeSpace(1)
-	stats.freeSpace(1)
-	mustSucceed(stats.makeSpaceFor(15))
-	mustError(stats.makeSpaceFor(15))
+	mustSucceed(stats.MakeSpaceFor(1))
+	mustSucceed(stats.MakeSpaceFor(1))
+	mustError(stats.MakeSpaceFor(1))
+	stats.FreeSpace(1)
+	mustSucceed(stats.MakeSpaceFor(1))
+	stats.FreeSpace(1)
+	stats.FreeSpace(1)
+	mustSucceed(stats.MakeSpaceFor(15))
+	mustError(stats.MakeSpaceFor(15))
 }

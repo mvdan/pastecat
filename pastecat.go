@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -12,23 +11,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mvdan/pastecat/storage"
+
 	"github.com/mvdan/bytesize"
 	"github.com/mvdan/pflag"
 )
 
 const (
-	// Length of the random hexadecimal ids assigned to pastes. At least 4.
-	idSize = 8
-	// Number of times to try getting an unused random paste id
-	randTries = 10
 	// Name of the HTTP form field when uploading a paste
 	fieldName = "paste"
 	// Content-Type when serving pastes
 	contentType = "text/plain; charset=utf-8"
 	// Report usage stats how often
 	statsReport = 1 * time.Minute
-	// How long to wait before retrying to delete a file
-	deleteRetry = 2 * time.Minute
 
 	// HTTP response strings
 	invalidID     = "invalid paste id"
@@ -50,27 +45,6 @@ func init() {
 	pflag.VarP(&maxStorage, "max-storage", "M", "Maximum storage size to use at once")
 }
 
-// ID is the binary representation of the identifier for a paste
-type ID [idSize / 2]byte
-
-// IDFromString parses a hexadecimal string into an ID. Returns the ID and an
-// error, if any.
-func IDFromString(hexID string) (id ID, err error) {
-	if len(hexID) != idSize {
-		return id, fmt.Errorf("invalid id at %s", hexID)
-	}
-	b, err := hex.DecodeString(hexID)
-	if err != nil || len(b) != idSize/2 {
-		return id, fmt.Errorf("invalid id at %s", hexID)
-	}
-	copy(id[:], b)
-	return id, nil
-}
-
-func (id ID) String() string {
-	return hex.EncodeToString(id[:])
-}
-
 func getContentFromForm(r *http.Request) ([]byte, error) {
 	if value := r.FormValue(fieldName); len(value) > 0 {
 		return []byte(value), nil
@@ -85,7 +59,7 @@ func getContentFromForm(r *http.Request) ([]byte, error) {
 	return nil, errors.New("no paste provided")
 }
 
-func setHeaders(header http.Header, id ID, paste Paste) {
+func setHeaders(header http.Header, id storage.ID, paste storage.Paste) {
 	modTime := paste.ModTime()
 	header.Set("Etag", fmt.Sprintf("%d-%s", modTime.Unix(), id))
 	if *lifeTime > 0 {
@@ -98,7 +72,7 @@ func setHeaders(header http.Header, id ID, paste Paste) {
 	header.Set("Content-Type", contentType)
 }
 
-func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
+func handleGet(store storage.Store, w http.ResponseWriter, r *http.Request) {
 	if _, e := templates[r.URL.Path]; e {
 		err := tmpl.ExecuteTemplate(w, r.URL.Path,
 			struct {
@@ -117,13 +91,13 @@ func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	id, err := IDFromString(r.URL.Path[1:])
+	id, err := storage.IDFromString(r.URL.Path[1:])
 	if err != nil {
 		http.Error(w, invalidID, http.StatusBadRequest)
 		return
 	}
 	paste, err := store.Get(id)
-	if err == ErrPasteNotFound {
+	if err == storage.ErrPasteNotFound {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -136,7 +110,7 @@ func handleGet(store Store, w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", paste.ModTime(), paste)
 }
 
-func handlePost(store Store, stats *Stats, w http.ResponseWriter, r *http.Request) {
+func handlePost(store storage.Store, stats *storage.Stats, w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 	content, err := getContentFromForm(r)
 	size := int64(len(content))
@@ -144,21 +118,21 @@ func handlePost(store Store, stats *Stats, w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := stats.makeSpaceFor(size); err != nil {
+	if err := stats.MakeSpaceFor(size); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	}
 	id, err := store.Put(content)
 	if err != nil {
 		log.Printf("Unknown error on POST: %s", err)
-		stats.freeSpace(size)
+		stats.FreeSpace(size)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	setupPasteDeletion(store, stats, id, size, *lifeTime)
+	storage.SetupPasteDeletion(store, stats, id, size, *lifeTime)
 	fmt.Fprintf(w, "%s/%s\n", *siteURL, id)
 }
 
-func newHandler(store Store, stats *Stats) http.HandlerFunc {
+func newHandler(store storage.Store, stats *storage.Stats) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -171,7 +145,7 @@ func newHandler(store Store, stats *Stats) http.HandlerFunc {
 	})
 }
 
-func setupStore(stats *Stats, lifeTime time.Duration, storageType string, args []string) (Store, error) {
+func setupStore(stats *storage.Stats, lifeTime time.Duration, storageType string, args []string) (storage.Store, error) {
 	params, e := map[string]map[string]string{
 		"fs": {
 			"dir": "pastes",
@@ -197,13 +171,13 @@ func setupStore(stats *Stats, lifeTime time.Duration, storageType string, args [
 	switch storageType {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
-		return NewFileStore(stats, lifeTime, params["dir"])
+		return storage.NewFileStore(stats, lifeTime, params["dir"])
 	case "fs-mmap":
 		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
-		return NewMmapStore(stats, lifeTime, params["dir"])
+		return storage.NewMmapStore(stats, lifeTime, params["dir"])
 	case "mem":
 		log.Printf("Starting up in-memory store")
-		return NewMemStore()
+		return storage.NewMemStore()
 	}
 	return nil, nil
 }
@@ -217,9 +191,9 @@ func main() {
 		log.Fatalf("Specified a maximum paste size that would overflow int64!")
 	}
 	loadTemplates()
-	stats := Stats{
-		maxNumber:  *maxNumber,
-		maxStorage: int64(maxStorage),
+	stats := storage.Stats{
+		MaxNumber:  *maxNumber,
+		MaxStorage: int64(maxStorage),
 	}
 	log.Printf("siteURL    = %s", *siteURL)
 	log.Printf("listen     = %s", *listen)

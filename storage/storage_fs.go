@@ -1,7 +1,7 @@
 /* Copyright (c) 2014-2015, Daniel Martí <mvdan@mvdan.cc> */
 /* See LICENSE for licensing information */
 
-package main
+package storage
 
 import (
 	"encoding/hex"
@@ -185,13 +185,13 @@ func fileRecover(insert fileInsert, s Store, stats *Stats, lifeTime time.Duratio
 		if size == 0 {
 			return os.Remove(path)
 		}
-		if err := stats.makeSpaceFor(size); err != nil {
+		if err := stats.MakeSpaceFor(size); err != nil {
 			return err
 		}
 		if err := insert(id, path, modTime, size); err != nil {
 			return err
 		}
-		setupPasteDeletion(s, stats, id, size, lifeLeft)
+		SetupPasteDeletion(s, stats, id, size, lifeLeft)
 		return nil
 	}
 }

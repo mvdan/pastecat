@@ -1,14 +1,25 @@
 /* Copyright (c) 2014-2015, Daniel Martí <mvdan@mvdan.cc> */
 /* See LICENSE for licensing information */
 
-package main
+package storage
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"time"
+)
+
+const (
+	// Length of the random hexadecimal ids assigned to pastes. At least 4.
+	idSize = 8
+	// Number of times to try getting an unused random paste id
+	randTries = 10
+	// How long to wait before retrying to delete a file
+	deleteRetry = 2 * time.Minute
 )
 
 var (
@@ -27,6 +38,27 @@ type Paste interface {
 	io.Closer
 	ModTime() time.Time
 	Size() int64
+}
+
+// ID is the binary representation of the identifier for a paste
+type ID [idSize / 2]byte
+
+// IDFromString parses a hexadecimal string into an ID. Returns the ID and an
+// error, if any.
+func IDFromString(hexID string) (id ID, err error) {
+	if len(hexID) != idSize {
+		return id, fmt.Errorf("invalid id at %s", hexID)
+	}
+	b, err := hex.DecodeString(hexID)
+	if err != nil || len(b) != idSize/2 {
+		return id, fmt.Errorf("invalid id at %s", hexID)
+	}
+	copy(id[:], b)
+	return id, nil
+}
+
+func (id ID) String() string {
+	return hex.EncodeToString(id[:])
 }
 
 // A Store represents a database holding multiple pastes identified by their
@@ -56,7 +88,7 @@ func randomID(available func(ID) bool) (ID, error) {
 	return id, ErrNoUnusedIDFound
 }
 
-func setupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Duration) {
+func SetupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Duration) {
 	if after == 0 {
 		return
 	}
@@ -65,7 +97,7 @@ func setupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Dur
 		for {
 			<-timer.C
 			if err := s.Delete(id); err == nil {
-				stats.freeSpace(size)
+				stats.FreeSpace(size)
 				break
 			}
 			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)

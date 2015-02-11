@@ -1,7 +1,7 @@
 /* Copyright (c) 2014-2015, Daniel Martí <mvdan@mvdan.cc> */
 /* See LICENSE for licensing information */
 
-package main
+package storage
 
 import (
 	"errors"
@@ -20,18 +20,18 @@ var (
 )
 
 type Stats struct {
-	number, maxNumber   int
-	storage, maxStorage int64
+	number, MaxNumber   int
+	storage, MaxStorage int64
 	sync.RWMutex
 }
 
-func (s *Stats) makeSpaceFor(size int64) error {
+func (s *Stats) MakeSpaceFor(size int64) error {
 	s.Lock()
 	defer s.Unlock()
-	if s.maxNumber > 0 && s.number >= s.maxNumber {
+	if s.MaxNumber > 0 && s.number >= s.MaxNumber {
 		return ErrReachedMaxNumber
 	}
-	if s.maxStorage > 0 && s.storage+size > s.maxStorage {
+	if s.MaxStorage > 0 && s.storage+size > s.MaxStorage {
 		return ErrReachedMaxStorage
 	}
 	s.number++
@@ -39,7 +39,7 @@ func (s *Stats) makeSpaceFor(size int64) error {
 	return nil
 }
 
-func (s *Stats) freeSpace(size int64) {
+func (s *Stats) FreeSpace(size int64) {
 	s.Lock()
 	s.number--
 	s.storage -= size
@@ -47,17 +47,17 @@ func (s *Stats) freeSpace(size int64) {
 }
 
 func (s *Stats) reportNumber() string {
-	if s.maxNumber > 0 {
+	if s.MaxNumber > 0 {
 		return fmt.Sprintf("%d (%.2f%% out of %d)", s.number,
-			float64(s.number*100)/float64(s.maxNumber), s.maxNumber)
+			float64(s.number*100)/float64(s.MaxNumber), s.MaxNumber)
 	}
 	return fmt.Sprintf("%d", s.number)
 }
 
 func (s *Stats) reportStorage() string {
-	if s.maxStorage > 0 {
+	if s.MaxStorage > 0 {
 		return fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(s.storage),
-			float64(s.storage*100)/float64(s.maxStorage), bytesize.ByteSize(s.maxStorage))
+			float64(s.storage*100)/float64(s.MaxStorage), bytesize.ByteSize(s.MaxStorage))
 	}
 	return fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
 }
