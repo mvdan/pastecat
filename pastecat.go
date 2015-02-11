@@ -23,7 +23,7 @@ const (
 	// Content-Type when serving pastes
 	contentType = "text/plain; charset=utf-8"
 	// Report usage stats how often
-	statsReport = 1 * time.Minute
+	reportInterval = 1 * time.Minute
 
 	// HTTP response strings
 	invalidID     = "invalid paste id"
@@ -210,14 +210,33 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not setup paste store: %s", err)
 	}
-	ticker := time.NewTicker(statsReport)
+
+	statsReport := func() {
+		num, stg := stats.Report()
+		var numStats, stgStats string
+		if stats.MaxNumber > 0 {
+			numStats = fmt.Sprintf("%d (%.2f%% out of %d)", num,
+				float64(num*100)/float64(stats.MaxNumber), stats.MaxNumber)
+		} else {
+			numStats = fmt.Sprintf("%d", num)
+		}
+		if stats.MaxStorage > 0 {
+			stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(stg),
+				float64(stg*100)/float64(stats.MaxStorage), bytesize.ByteSize(stats.MaxStorage))
+		} else {
+			stgStats = fmt.Sprintf("%s", stg)
+		}
+		log.Printf("Have a total of %s pastes using %s", numStats, stgStats)
+	}
+
+	ticker := time.NewTicker(reportInterval)
 	go func() {
 		for range ticker.C {
-			log.Println(stats.Report())
+			statsReport()
 		}
 	}()
 	http.HandleFunc("/", newHandler(store, &stats))
 	log.Println("Up and running!")
-	log.Println(stats.Report())
+	statsReport()
 	log.Fatal(http.ListenAndServe(*listen, nil))
 }

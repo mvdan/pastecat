@@ -5,10 +5,7 @@ package storage
 
 import (
 	"errors"
-	"fmt"
 	"sync"
-
-	"github.com/mvdan/bytesize"
 )
 
 var (
@@ -46,26 +43,10 @@ func (s *Stats) FreeSpace(size int64) {
 	s.Unlock()
 }
 
-func (s *Stats) reportNumber() string {
-	if s.MaxNumber > 0 {
-		return fmt.Sprintf("%d (%.2f%% out of %d)", s.number,
-			float64(s.number*100)/float64(s.MaxNumber), s.MaxNumber)
-	}
-	return fmt.Sprintf("%d", s.number)
-}
-
-func (s *Stats) reportStorage() string {
-	if s.MaxStorage > 0 {
-		return fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(s.storage),
-			float64(s.storage*100)/float64(s.MaxStorage), bytesize.ByteSize(s.MaxStorage))
-	}
-	return fmt.Sprintf("%s", bytesize.ByteSize(s.storage))
-}
-
-func (s *Stats) Report() string {
+func (s *Stats) Report() (int, int64) {
 	s.RLock()
-	number := s.reportNumber()
-	storage := s.reportStorage()
+	number := s.number
+	storage := s.storage
 	s.RUnlock()
-	return fmt.Sprintf("Have a total of %s pastes using %s", number, storage)
+	return number, storage
 }
