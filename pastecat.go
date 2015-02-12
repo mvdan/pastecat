@@ -72,7 +72,23 @@ func setHeaders(header http.Header, id storage.ID, paste storage.Paste) {
 	header.Set("Content-Type", contentType)
 }
 
-func handleGet(store storage.Store, w http.ResponseWriter, r *http.Request) {
+type httpHandler struct {
+	store storage.Store
+	stats *storage.Stats
+}
+
+func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		h.handleGet(w, r)
+	case "POST":
+		h.handlePost(w, r)
+	default:
+		http.Error(w, unknownAction, http.StatusBadRequest)
+	}
+}
+
+func (h *httpHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	if _, e := templates[r.URL.Path]; e {
 		err := tmpl.ExecuteTemplate(w, r.URL.Path,
 			struct {
@@ -96,7 +112,7 @@ func handleGet(store storage.Store, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, invalidID, http.StatusBadRequest)
 		return
 	}
-	paste, err := store.Get(id)
+	paste, err := h.store.Get(id)
 	if err == storage.ErrPasteNotFound {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -110,7 +126,7 @@ func handleGet(store storage.Store, w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", paste.ModTime(), paste)
 }
 
-func handlePost(store storage.Store, stats *storage.Stats, w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxSize))
 	content, err := getContentFromForm(r)
 	size := int64(len(content))
@@ -118,34 +134,21 @@ func handlePost(store storage.Store, stats *storage.Stats, w http.ResponseWriter
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := stats.MakeSpaceFor(size); err != nil {
+	if err := h.stats.MakeSpaceFor(size); err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	}
-	id, err := store.Put(content)
+	id, err := h.store.Put(content)
 	if err != nil {
 		log.Printf("Unknown error on POST: %s", err)
-		stats.FreeSpace(size)
+		h.stats.FreeSpace(size)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	storage.SetupPasteDeletion(store, stats, id, size, *lifeTime)
+	storage.SetupPasteDeletion(h.store, h.stats, id, size, *lifeTime)
 	fmt.Fprintf(w, "%s/%s\n", *siteURL, id)
 }
 
-func newHandler(store storage.Store, stats *storage.Stats) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			handleGet(store, w, r)
-		case "POST":
-			handlePost(store, stats, w, r)
-		default:
-			http.Error(w, unknownAction, http.StatusBadRequest)
-		}
-	})
-}
-
-func setupStore(stats *storage.Stats, lifeTime time.Duration, storageType string, args []string) (storage.Store, error) {
+func (h *httpHandler) setupStore(lifeTime time.Duration, storageType string, args []string) error {
 	params, e := map[string]map[string]string{
 		"fs": {
 			"dir": "pastes",
@@ -156,10 +159,10 @@ func setupStore(stats *storage.Stats, lifeTime time.Duration, storageType string
 		"mem": {},
 	}[storageType]
 	if !e {
-		return nil, fmt.Errorf("unknown storage type '%s'", storageType)
+		return fmt.Errorf("unknown storage type '%s'", storageType)
 	}
 	if len(args) > len(params) {
-		return nil, fmt.Errorf("too many arguments given for %s", storageType)
+		return fmt.Errorf("too many arguments given for %s", storageType)
 	}
 	for k := range params {
 		if len(args) == 0 {
@@ -168,18 +171,37 @@ func setupStore(stats *storage.Stats, lifeTime time.Duration, storageType string
 		params[k] = args[0]
 		args = args[1:]
 	}
+	var err error
 	switch storageType {
 	case "fs":
 		log.Printf("Starting up file store in the directory '%s'", params["dir"])
-		return storage.NewFileStore(stats, lifeTime, params["dir"])
+		h.store, err = storage.NewFileStore(h.stats, lifeTime, params["dir"])
 	case "fs-mmap":
 		log.Printf("Starting up mmapped file store in the directory '%s'", params["dir"])
-		return storage.NewMmapStore(stats, lifeTime, params["dir"])
+		h.store, err = storage.NewMmapStore(h.stats, lifeTime, params["dir"])
 	case "mem":
 		log.Printf("Starting up in-memory store")
-		return storage.NewMemStore()
+		h.store, err = storage.NewMemStore()
 	}
-	return nil, nil
+	return err
+}
+
+func logStats(stats *storage.Stats) {
+	num, stg := stats.Report()
+	var numStats, stgStats string
+	if stats.MaxNumber > 0 {
+		numStats = fmt.Sprintf("%d (%.2f%% out of %d)", num,
+			float64(num*100)/float64(stats.MaxNumber), stats.MaxNumber)
+	} else {
+		numStats = fmt.Sprintf("%d", num)
+	}
+	if stats.MaxStorage > 0 {
+		stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(stg),
+			float64(stg*100)/float64(stats.MaxStorage), bytesize.ByteSize(stats.MaxStorage))
+	} else {
+		stgStats = fmt.Sprintf("%s", stg)
+	}
+	log.Printf("Have a total of %s pastes using %s", numStats, stgStats)
 }
 
 func main() {
@@ -191,7 +213,8 @@ func main() {
 		log.Fatalf("Specified a maximum paste size that would overflow int64!")
 	}
 	loadTemplates()
-	stats := storage.Stats{
+	var handler httpHandler
+	handler.stats = &storage.Stats{
 		MaxNumber:  *maxNumber,
 		MaxStorage: int64(maxStorage),
 	}
@@ -206,37 +229,18 @@ func main() {
 	if len(args) == 0 {
 		args = []string{"fs"}
 	}
-	store, err := setupStore(&stats, *lifeTime, args[0], args[1:])
-	if err != nil {
+	if err := handler.setupStore(*lifeTime, args[0], args[1:]); err != nil {
 		log.Fatalf("Could not setup paste store: %s", err)
-	}
-
-	statsReport := func() {
-		num, stg := stats.Report()
-		var numStats, stgStats string
-		if stats.MaxNumber > 0 {
-			numStats = fmt.Sprintf("%d (%.2f%% out of %d)", num,
-				float64(num*100)/float64(stats.MaxNumber), stats.MaxNumber)
-		} else {
-			numStats = fmt.Sprintf("%d", num)
-		}
-		if stats.MaxStorage > 0 {
-			stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(stg),
-				float64(stg*100)/float64(stats.MaxStorage), bytesize.ByteSize(stats.MaxStorage))
-		} else {
-			stgStats = fmt.Sprintf("%s", stg)
-		}
-		log.Printf("Have a total of %s pastes using %s", numStats, stgStats)
 	}
 
 	ticker := time.NewTicker(reportInterval)
 	go func() {
-		statsReport()
+		logStats(handler.stats)
 		for range ticker.C {
-			statsReport()
+			logStats(handler.stats)
 		}
 	}()
-	http.HandleFunc("/", newHandler(store, &stats))
+	http.Handle("/", handler)
 	log.Println("Up and running!")
 	log.Fatal(http.ListenAndServe(*listen, nil))
 }
