@@ -34,6 +34,7 @@ var (
 	siteURL   = pflag.StringP("url", "u", "http://localhost:8080", "URL of the site")
 	listen    = pflag.StringP("listen", "l", ":8080", "Host and port to listen to")
 	lifeTime  = pflag.DurationP("lifetime", "t", 24*time.Hour, "Lifetime of the pastes")
+	timeout   = pflag.DurationP("timeout", "T", 5*time.Second, "Timeout of HTTP requests")
 	maxNumber = pflag.IntP("max-number", "m", 0, "Maximum number of pastes to store at once")
 
 	maxSize    = 1 * bytesize.MB
@@ -240,7 +241,11 @@ func main() {
 			logStats(handler.stats)
 		}
 	}()
-	http.Handle("/", handler)
+	var finalHandler http.Handler = handler
+	if *timeout > 0 {
+		finalHandler = http.TimeoutHandler(finalHandler, *timeout, "")
+	}
+	http.Handle("/", finalHandler)
 	log.Println("Up and running!")
 	log.Fatal(http.ListenAndServe(*listen, nil))
 }

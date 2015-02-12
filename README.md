@@ -35,6 +35,7 @@ Fetch it:
 * **-u, --url** - URL of the site - *http://localhost:8080*
 * **-l, --listen** - Host and port to listen to - *:8080*
 * **-t, --lifetime** - Lifetime of the pastes - *24h*
+* **-T, --timeout** - Timeout of HTTP requests - *5s*
 * **-m, --max-number** - Maximum number of pastes to store at once - *0*
 * **-s, --max-size** - Maximum size of pastes - *1M*
 * **-M, --max-storage** - Maximum storage size to use at once - *1G*
