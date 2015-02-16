@@ -132,11 +132,13 @@ func (s *MmapStore) Delete(id ID) error {
 		return ErrPasteNotFound
 	}
 	cached.reading.Wait()
-	if err := cached.mmap.Unmap(); err != nil {
-		return err
+	err1 := cached.mmap.Unmap()
+	err2 := os.Remove(cached.path)
+	if err1 != nil {
+		return err1
 	}
-	if err := os.Remove(cached.path); err != nil {
-		return err
+	if err2 != nil {
+		return err2
 	}
 	delete(s.cache, id)
 	return nil
