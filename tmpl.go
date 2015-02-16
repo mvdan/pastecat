@@ -26,8 +26,8 @@ func loadTemplates() {
 
 var templates = map[string]string{
 	"/": `<html>
-<body>
-<pre>
+<body style="text-align:center">
+<pre style="display:inline-block;text-align:left;margin:2em 2em 2em 0">
 Set up an alias:
 
     $ alias pcat='curl -F "{{.FieldName}}=&lt;-" {{.SiteURL}}'
