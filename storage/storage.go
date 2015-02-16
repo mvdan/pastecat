@@ -18,8 +18,10 @@ const (
 	idSize = 8
 	// Number of times to try getting an unused random paste id
 	randTries = 10
-	// How long to wait before retrying to delete a file
-	deleteRetry = 2 * time.Minute
+	// Number of times times to retry deleting a paste
+	deleteRetries = 5
+	// How long to wait before retrying to delete a paste
+	deleteRetryTimeout = 1 * time.Minute
 )
 
 var (
@@ -103,15 +105,16 @@ func SetupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Dur
 		if err := del(); err == nil {
 			return
 		}
-		timer := time.NewTimer(deleteRetry)
-		for {
-			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
+		timer := time.NewTimer(deleteRetryTimeout)
+		for i := 0; i < deleteRetries; i++ {
+			log.Printf("Could not delete %s, trying again in %s", id, deleteRetryTimeout)
 			<-timer.C
 			if err := del(); err == nil {
 				break
 			}
-			timer.Reset(deleteRetry)
+			timer.Reset(deleteRetryTimeout)
 		}
+		log.Printf("Giving up on deleting %s", id)
 	}
 	time.AfterFunc(after, f)
 }
