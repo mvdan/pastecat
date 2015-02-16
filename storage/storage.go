@@ -92,16 +92,26 @@ func SetupPasteDeletion(s Store, stats *Stats, id ID, size int64, after time.Dur
 	if after == 0 {
 		return
 	}
-	timer := time.NewTimer(after)
-	go func() {
+	f := func() {
+		del := func() error {
+			if err := s.Delete(id); err != nil {
+				return err
+			}
+			stats.FreeSpace(size)
+			return nil
+		}
+		if err := del(); err == nil {
+			return
+		}
+		timer := time.NewTimer(deleteRetry)
 		for {
+			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
 			<-timer.C
-			if err := s.Delete(id); err == nil {
-				stats.FreeSpace(size)
+			if err := del(); err == nil {
 				break
 			}
-			log.Printf("Could not delete %s, will try again in %s", id, deleteRetry)
 			timer.Reset(deleteRetry)
 		}
-	}()
+	}
+	time.AfterFunc(after, f)
 }
