@@ -62,7 +62,7 @@ func getContentFromForm(r *http.Request) ([]byte, error) {
 
 func setHeaders(header http.Header, id storage.ID, paste storage.Paste) {
 	modTime := paste.ModTime()
-	header.Set("Etag", fmt.Sprintf("%d-%s", modTime.Unix(), id))
+	header.Set("Etag", fmt.Sprintf(`"%d-%s"`, modTime.Unix(), id))
 	if *lifeTime > 0 {
 		deathTime := modTime.Add(*lifeTime)
 		lifeLeft := deathTime.Sub(time.Now())
