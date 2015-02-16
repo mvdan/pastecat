@@ -54,17 +54,19 @@ Each paste will be deleted after {{.LifeTime}}.
 </html>
 `,
 	"/form": `<html>
-<body>
+<body style="text-align:center">
+<div style="inline-block">
 	<form action="{{.SiteURL}}" method="post" enctype="multipart/form-data">
 		<textarea cols=80 rows=24 name="{{.FieldName}}"></textarea>
 		<br/>
 		<button type="submit">Paste text</button>
 	</form>
+	<br/>
 	<form action="{{.SiteURL}}" method="post" enctype="multipart/form-data">
 		<input type="file" name="{{.FieldName}}"></input>
-		<br/>
 		<button type="submit">Paste file</button>
 	</form>
+</div>
 </body>
 </html>
 `,
