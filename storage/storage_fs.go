@@ -139,11 +139,11 @@ func (s *FileStore) Delete(id ID) error {
 	if !e {
 		return ErrPasteNotFound
 	}
-	delete(s.cache, id)
 	cached.reading.Wait()
 	if err := os.Remove(cached.path); err != nil {
 		return err
 	}
+	delete(s.cache, id)
 	return nil
 }
 
