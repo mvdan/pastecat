@@ -200,7 +200,7 @@ func logStats(stats *storage.Stats) {
 		stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(stg),
 			float64(stg*100)/float64(stats.MaxStorage), bytesize.ByteSize(stats.MaxStorage))
 	} else {
-		stgStats = fmt.Sprintf("%s", stg)
+		stgStats = fmt.Sprintf("%s", bytesize.ByteSize(stg))
 	}
 	log.Printf("Have a total of %s pastes using %s", numStats, stgStats)
 }
