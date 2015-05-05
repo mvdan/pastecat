@@ -2,14 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package pflag_test
+package pflag
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"testing"
-
-	. "github.com/mvdan/pflag"
 )
 
 // This value can be a boolean ("true", "false") or "maybe"
@@ -50,6 +49,11 @@ func (v *triStateValue) String() string {
 		return strTriStateMaybe
 	}
 	return fmt.Sprintf("%v", bool(*v == triStateTrue))
+}
+
+// The type of the flag as requred by the pflag.Value interface
+func (v *triStateValue) Type() string {
+	return "version"
 }
 
 func setUpFlagSet(tristate *triStateValue) *FlagSet {
@@ -151,6 +155,8 @@ func TestImplicitFalse(t *testing.T) {
 func TestInvalidValue(t *testing.T) {
 	var tristate triStateValue
 	f := setUpFlagSet(&tristate)
+	var buf bytes.Buffer
+	f.SetOutput(&buf)
 	err := f.Parse([]string{"--tristate=invalid"})
 	if err == nil {
 		t.Fatal("expected an error but did not get any, tristate has value", tristate)

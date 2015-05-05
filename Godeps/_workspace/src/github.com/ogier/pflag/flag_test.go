@@ -2,19 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package pflag_test
+package pflag
 
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
 	"testing"
 	"time"
-
-	. "github.com/mvdan/pflag"
 )
 
 var (
@@ -196,9 +193,8 @@ func TestShorthand(t *testing.T) {
 		"--",
 		notaflag,
 	}
-	f.SetOutput(ioutil.Discard)
 	if err := f.Parse(args); err != nil {
-		t.Error("expected no error, got ", err)
+		t.Fatal(err)
 	}
 	if !f.Parsed() {
 		t.Error("f.Parse() = false after Parse")
@@ -350,35 +346,5 @@ func TestNoInterspersed(t *testing.T) {
 	args := f.Args()
 	if len(args) != 2 || args[0] != "break" || args[1] != "--false" {
 		t.Fatal("expected interspersed options/non-options to fail")
-	}
-}
-
-func TestTermination(t *testing.T) {
-	f := NewFlagSet("termination", ContinueOnError)
-	if f.Parsed() {
-		t.Error("f.Parse() = true before Parse")
-	}
-	arg1 := "ls"
-	arg2 := "/home"
-	args := []string{
-		"--",
-		arg1,
-		arg2,
-	}
-	f.SetOutput(ioutil.Discard)
-	if err := f.Parse(args); err != nil {
-		t.Fatal("expected no error; got ", err)
-	}
-	if !f.Parsed() {
-		t.Error("f.Parse() = false after Parse")
-	}
-	if len(f.Args()) != 2 {
-		t.Error("expected 2 arguments, got", len(f.Args()))
-	}
-	if f.Args()[0] != arg1 {
-		t.Errorf("expected argument %q got %q", arg1, f.Args()[0])
-	}
-	if f.Args()[1] != arg2 {
-		t.Errorf("expected argument %q got %q", arg2, f.Args()[1])
 	}
 }

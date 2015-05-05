@@ -14,7 +14,7 @@ import (
 	"github.com/mvdan/pastecat/storage"
 
 	"github.com/mvdan/bytesize"
-	"github.com/mvdan/pflag"
+	"github.com/ogier/pflag"
 )
 
 const (

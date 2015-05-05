@@ -18,7 +18,6 @@ func (i *uint16Value) Set(s string) error {
 	*i = uint16Value(v)
 	return err
 }
-
 func (i *uint16Value) Get() interface{} {
 	return uint16(*i)
 }

@@ -11,8 +11,9 @@
 			"Rev": "b70382cfe9d125ce65794b149bda85dd646d2aec"
 		},
 		{
-			"ImportPath": "github.com/mvdan/pflag",
-			"Rev": "0d54be5bfeb42a0a5726d196f66b3d06adde88ee"
+			"ImportPath": "github.com/ogier/pflag",
+			"Comment": "v0.0.1-2-g2e6f5f3",
+			"Rev": "2e6f5f3f0c40ab9cb459742296f6a2aaab1fd5dc"
 		}
 	]
 }
