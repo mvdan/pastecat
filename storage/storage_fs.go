@@ -218,10 +218,10 @@ func setupSubdir(topdir string, rec filepath.WalkFunc, h byte) error {
 			return fmt.Errorf("%s/%s exists but is not a directory", topdir, dir)
 		}
 		if err := filepath.Walk(dir, rec); err != nil {
-			return fmt.Errorf("cannot recover data directory %s/%s: %s", topdir, dir, err)
+			return fmt.Errorf("cannot recover data directory %s/%s: %v", topdir, dir, err)
 		}
 	} else if err := os.Mkdir(dir, 0700); err != nil {
-		return fmt.Errorf("cannot create data directory %s/%s: %s", topdir, dir, err)
+		return fmt.Errorf("cannot create data directory %s/%s: %v", topdir, dir, err)
 	}
 	return nil
 }

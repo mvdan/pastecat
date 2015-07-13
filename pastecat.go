@@ -104,7 +104,7 @@ func (h *httpHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 				FieldName: fieldName,
 			})
 		if err != nil {
-			log.Printf("Error executing template for %s: %s", r.URL.Path, err)
+			log.Printf("Error executing template for %s: %v", r.URL.Path, err)
 		}
 		return
 	}
@@ -118,7 +118,7 @@ func (h *httpHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	} else if err != nil {
-		log.Printf("Unknown error on GET: %s", err)
+		log.Printf("Unknown error on GET: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -140,7 +140,7 @@ func (h *httpHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := h.store.Put(content)
 	if err != nil {
-		log.Printf("Unknown error on POST: %s", err)
+		log.Printf("Unknown error on POST: %v", err)
 		h.stats.FreeSpace(size)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -231,7 +231,7 @@ func main() {
 		args = []string{"fs"}
 	}
 	if err := handler.setupStore(*lifeTime, args[0], args[1:]); err != nil {
-		log.Fatalf("Could not setup paste store: %s", err)
+		log.Fatalf("Could not setup paste store: %v", err)
 	}
 
 	ticker := time.NewTicker(reportInterval)
