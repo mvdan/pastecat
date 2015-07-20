@@ -6,22 +6,20 @@ storage backends.
 Designed to optionally remove pastes after a certain period of time. If using
 a persistent storage backend, pastes will be kept between runs.
 
-This software runs the [paste.cat](http://paste.cat) public service.
-
 ### Use
 
 Set up an alias:
 
-	$ alias pcat='curl -F "paste=<-" http://paste.cat'
+	$ alias pcat='curl -F "paste=<-" http://my.site'
 
 Upload a new paste:
 
 	$ echo foo | pcat
-	http://paste.cat/a63d03b9
+	http://my.site/a63d03b9
 
 Fetch it:
 
-	$ curl http://paste.cat/a63d03b9
+	$ curl http://my.site/a63d03b9
 	foo
 
 ### Run
