@@ -22,6 +22,9 @@ Fetch it:
 	$ curl http://my.site/a63d03b9
 	foo
 
+Doing a `POST` on `/redirect` will send you directly to the paste instead of
+returning its url.
+
 ### Run
 
 ##### Quick setup

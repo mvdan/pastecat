@@ -146,7 +146,13 @@ func (h *httpHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	storage.SetupPasteDeletion(h.store, h.stats, id, size, *lifeTime)
-	fmt.Fprintf(w, "%s/%s\n", *siteURL, id)
+	url := fmt.Sprintf("%s/%s", *siteURL, id)
+	switch r.URL.Path {
+	case "/redirect":
+		http.Redirect(w, r, url, 302)
+	default:
+		fmt.Fprintln(w, url)
+	}
 }
 
 func (h *httpHandler) setupStore(lifeTime time.Duration, storageType string, args []string) error {
