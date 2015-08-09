@@ -4,7 +4,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/edsrzf/mmap-go",
-			"Rev": "6c75090c55983bef2e129e173681b20d24871ef8"
+			"Rev": "f9d5617258fa999241e93b43f2ff89e4507cc3f2"
 		}
 	]
 }
