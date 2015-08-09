@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/mvdan/pastecat/storage"
-
-	"github.com/mvdan/bytesize"
 )
 
 const (
@@ -37,8 +35,8 @@ var (
 	timeout   = flag.Duration("T", 5*time.Second, "Timeout of HTTP requests")
 	maxNumber = flag.Int("m", 0, "Maximum number of pastes to store at once")
 
-	maxSize    = 1 * bytesize.MB
-	maxStorage = 1 * bytesize.GB
+	maxSize    = 1 * storage.MB
+	maxStorage = 1 * storage.GB
 )
 
 func init() {
@@ -94,7 +92,7 @@ func (h *httpHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		err := tmpl.ExecuteTemplate(w, r.URL.Path,
 			struct {
 				SiteURL   string
-				MaxSize   bytesize.ByteSize
+				MaxSize   storage.ByteSize
 				LifeTime  time.Duration
 				FieldName string
 			}{
@@ -203,20 +201,20 @@ func logStats(stats *storage.Stats) {
 		numStats = fmt.Sprintf("%d", num)
 	}
 	if stats.MaxStorage > 0 {
-		stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", bytesize.ByteSize(stg),
-			float64(stg*100)/float64(stats.MaxStorage), bytesize.ByteSize(stats.MaxStorage))
+		stgStats = fmt.Sprintf("%s (%.2f%% out of %s)", storage.ByteSize(stg),
+			float64(stg*100)/float64(stats.MaxStorage), storage.ByteSize(stats.MaxStorage))
 	} else {
-		stgStats = fmt.Sprintf("%s", bytesize.ByteSize(stg))
+		stgStats = fmt.Sprintf("%s", storage.ByteSize(stg))
 	}
 	log.Printf("Have a total of %s pastes using %s", numStats, stgStats)
 }
 
 func main() {
 	flag.Parse()
-	if maxStorage > 1*bytesize.EB {
+	if maxStorage > 1*storage.EB {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
-	if maxSize > 1*bytesize.EB {
+	if maxSize > 1*storage.EB {
 		log.Fatalf("Specified a maximum paste size that would overflow int64!")
 	}
 	loadTemplates()
