@@ -1,5 +1,7 @@
 # pastecat
 
+[![Build Status](https://travis-ci.org/mvdan/pastecat.svg?branch=master)](https://travis-ci.org/mvdan/pastecat)
+
 A simple and self-hosted pastebin service written in Go. Can use a variety of
 storage backends.
 
