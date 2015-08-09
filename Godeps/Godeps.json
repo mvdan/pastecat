@@ -5,15 +5,6 @@
 		{
 			"ImportPath": "github.com/edsrzf/mmap-go",
 			"Rev": "6c75090c55983bef2e129e173681b20d24871ef8"
-		},
-		{
-			"ImportPath": "github.com/mvdan/bytesize",
-			"Rev": "b70382cfe9d125ce65794b149bda85dd646d2aec"
-		},
-		{
-			"ImportPath": "github.com/ogier/pflag",
-			"Comment": "v0.0.1-2-g2e6f5f3",
-			"Rev": "2e6f5f3f0c40ab9cb459742296f6a2aaab1fd5dc"
 		}
 	]
 }
