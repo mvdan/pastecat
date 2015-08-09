@@ -33,13 +33,13 @@ returning its url.
 
 ##### Options
 
-* **-u, --url** - URL of the site - *http://localhost:8080*
-* **-l, --listen** - Host and port to listen to - *:8080*
-* **-t, --lifetime** - Lifetime of the pastes - *24h*
-* **-T, --timeout** - Timeout of HTTP requests - *5s*
-* **-m, --max-number** - Maximum number of pastes to store at once - *0*
-* **-s, --max-size** - Maximum size of pastes - *1M*
-* **-M, --max-storage** - Maximum storage size to use at once - *1G*
+* **-u** - URL of the site - *http://localhost:8080*
+* **-l** - Host and port to listen to - *:8080*
+* **-t** - Lifetime of the pastes - *24h*
+* **-T** - Timeout of HTTP requests - *5s*
+* **-m** - Maximum number of pastes to store at once - *0*
+* **-s** - Maximum size of pastes - *1M*
+* **-M** - Maximum storage size to use at once - *1G*
 
 Any of the options requiring quantities can take a zero value as infinity.
 

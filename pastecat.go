@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"github.com/mvdan/pastecat/storage"
 
 	"github.com/mvdan/bytesize"
-	"github.com/ogier/pflag"
 )
 
 const (
@@ -31,19 +31,19 @@ const (
 )
 
 var (
-	siteURL   = pflag.StringP("url", "u", "http://localhost:8080", "URL of the site")
-	listen    = pflag.StringP("listen", "l", ":8080", "Host and port to listen to")
-	lifeTime  = pflag.DurationP("lifetime", "t", 24*time.Hour, "Lifetime of the pastes")
-	timeout   = pflag.DurationP("timeout", "T", 5*time.Second, "Timeout of HTTP requests")
-	maxNumber = pflag.IntP("max-number", "m", 0, "Maximum number of pastes to store at once")
+	siteURL   = flag.String("u", "http://localhost:8080", "URL of the site")
+	listen    = flag.String("l", ":8080", "Host and port to listen to")
+	lifeTime  = flag.Duration("t", 24*time.Hour, "Lifetime of the pastes")
+	timeout   = flag.Duration("T", 5*time.Second, "Timeout of HTTP requests")
+	maxNumber = flag.Int("m", 0, "Maximum number of pastes to store at once")
 
 	maxSize    = 1 * bytesize.MB
 	maxStorage = 1 * bytesize.GB
 )
 
 func init() {
-	pflag.VarP(&maxSize, "max-size", "s", "Maximum size of pastes")
-	pflag.VarP(&maxStorage, "max-storage", "M", "Maximum storage size to use at once")
+	flag.Var(&maxSize, "s", "Maximum size of pastes")
+	flag.Var(&maxStorage, "M", "Maximum storage size to use at once")
 }
 
 func getContentFromForm(r *http.Request) ([]byte, error) {
@@ -212,7 +212,7 @@ func logStats(stats *storage.Stats) {
 }
 
 func main() {
-	pflag.Parse()
+	flag.Parse()
 	if maxStorage > 1*bytesize.EB {
 		log.Fatalf("Specified a maximum storage size that would overflow int64!")
 	}
@@ -232,7 +232,7 @@ func main() {
 	log.Printf("maxNumber  = %d", *maxNumber)
 	log.Printf("maxStorage = %s", maxStorage)
 
-	args := pflag.Args()
+	args := flag.Args()
 	if len(args) == 0 {
 		args = []string{"fs"}
 	}
