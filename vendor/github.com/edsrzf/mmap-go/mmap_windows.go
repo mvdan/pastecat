@@ -73,7 +73,20 @@ func mmap(len int, prot, flags, hfile uintptr, off int64) ([]byte, error) {
 
 func flush(addr, len uintptr) error {
 	errno := syscall.FlushViewOfFile(addr, len)
-	return os.NewSyscallError("FlushViewOfFile", errno)
+	if errno != nil {
+		return os.NewSyscallError("FlushViewOfFile", errno)
+	}
+
+	handleLock.Lock()
+	defer handleLock.Unlock()
+	handle, ok := handleMap[addr]
+	if !ok {
+		// should be impossible; we would've errored above
+		return errors.New("unknown base address")
+	}
+
+	errno = syscall.FlushFileBuffers(handle)
+	return os.NewSyscallError("FlushFileBuffers", errno)
 }
 
 func lock(addr, len uintptr) error {
@@ -88,13 +101,18 @@ func unlock(addr, len uintptr) error {
 
 func unmap(addr, len uintptr) error {
 	flush(addr, len)
+	// Lock the UnmapViewOfFile along with the handleMap deletion.
+	// As soon as we unmap the view, the OS is free to give the
+	// same addr to another new map. We don't want another goroutine
+	// to insert and remove the same addr into handleMap while
+	// we're trying to remove our old addr/handle pair.
+	handleLock.Lock()
+	defer handleLock.Unlock()
 	err := syscall.UnmapViewOfFile(addr)
 	if err != nil {
 		return err
 	}
 
-	handleLock.Lock()
-	defer handleLock.Unlock()
 	handle, ok := handleMap[addr]
 	if !ok {
 		// should be impossible; we would've errored above
