@@ -55,12 +55,12 @@ func TestParse(t *testing.T) {
 		{"8ZB", 8 * ZB, false},
 		{"9YB", 9 * YB, false},
 	} {
-		got, err := Parse(c.in)
+		got, err := parseBytesize(c.in)
 		if c.wantError && err == nil {
-			t.Errorf("Parse(\"%s\") did not error as expected", c.in)
+			t.Errorf("parseBytesize(\"%s\") did not error as expected", c.in)
 		}
 		if got != c.want {
-			t.Errorf("Parse(\"%s\") got %s, want %s", c.in, got, c.want)
+			t.Errorf("parseBytesize(\"%s\") got %s, want %s", c.in, got, c.want)
 		}
 	}
 }

@@ -48,17 +48,17 @@ func (b ByteSize) String() string {
 	return fmt.Sprintf("%.2fB", b)
 }
 
-func Parse(s string) (ByteSize, error) {
+func parseBytesize(s string) (ByteSize, error) {
 	parts := regexByteSize.FindStringSubmatch(s)
 	if parts == nil {
 		return 0, errors.New("invalid byte size")
 	}
-	f, err := strconv.ParseFloat(string(parts[1]), 64)
+	f, err := strconv.ParseFloat(parts[1], 64)
 	if err != nil {
 		return 0, err
 	}
 	size := ByteSize(f)
-	switch string(parts[2]) {
+	switch parts[2] {
 	case "KB", "K":
 		size *= KB
 	case "MB", "M":
@@ -80,7 +80,7 @@ func Parse(s string) (ByteSize, error) {
 }
 
 func (b *ByteSize) Set(value string) error {
-	size, err := Parse(value)
+	size, err := parseBytesize(value)
 	if err != nil {
 		return err
 	}
